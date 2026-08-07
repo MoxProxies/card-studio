@@ -52,12 +52,24 @@ export const TextLayer = LayerBase.extend({
   content: z.string(),
   fontFamily: z.string().default("Inter"),
   fontSizePt: z.number().positive().default(12),
+  /** Floor for the "shrink" search below — see maxFontSizePt. Unset falls
+   * back to a small fixed floor (4px-equivalent at whatever DPI is
+   * rendering), matching pre-range behavior. */
+  minFontSizePt: z.number().positive().optional(),
+  /** When set, overflow "shrink" searches from this size down to
+   * minFontSizePt for the largest size that still fits the box, instead
+   * of starting from fontSizePt and only ever decreasing — i.e. short
+   * content grows to fill the box instead of sitting at a small fixed
+   * size. Unset preserves the original shrink-only-from-fontSizePt
+   * behavior. */
+  maxFontSizePt: z.number().positive().optional(),
   fontWeight: z.union([z.literal("normal"), z.literal("bold"), z.number()]).default("normal"),
   italic: z.boolean().default(false),
   color: z.string().default("#000000"),
   align: z.enum(["left", "center", "right"]).default("left"),
   lineHeight: z.number().positive().default(1.2),
-  /** 'shrink' auto-reduces fontSizePt to fit the box; 'clip' truncates overflow. */
+  /** 'shrink' auto-fits fontSizePt (or the minFontSizePt..maxFontSizePt
+   * range, if set) to the box; 'clip' truncates overflow. */
   overflow: z.enum(["shrink", "clip", "visible"]).default("shrink"),
 });
 

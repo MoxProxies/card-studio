@@ -63,10 +63,20 @@ function tokenizeWord(word: string, resolveSymbol?: (token: string) => boolean):
  * becomes a fixed-width atomic run instead of literal characters, wrapped
  * as a unit like any other word. Omit both to treat "{...}" as plain text,
  * unchanged from before inline symbols existed.
+ *
+ * `startFontSizePx` doubles as the search ceiling: pass fontSizePt's px
+ * equivalent for the original shrink-only-from-here behavior, or a
+ * separate, larger maxFontSizePt's px equivalent to let the search grow
+ * into that headroom for short content instead of just sitting at
+ * fontSizePt — the loop always searches downward from whatever ceiling
+ * it's given, so "shrink from a big starting point" and "fit within a
+ * range" are the same algorithm. `minFontSizePx` is that search's floor
+ * (default 4, matching the original hardcoded value).
  */
 export function shrinkTextToFit(params: {
   content: string;
   startFontSizePx: number;
+  minFontSizePx?: number;
   maxWidthPx: number;
   maxHeightPx: number;
   lineHeightRatio: number;
@@ -79,6 +89,7 @@ export function shrinkTextToFit(params: {
   const {
     content,
     startFontSizePx,
+    minFontSizePx = 4,
     maxWidthPx,
     maxHeightPx,
     lineHeightRatio,
@@ -138,7 +149,7 @@ export function shrinkTextToFit(params: {
   let lines = layoutLines(fontSizePx);
 
   if (shrink) {
-    while (lines.length * (fontSizePx * lineHeightRatio) > maxHeightPx && fontSizePx > 4) {
+    while (lines.length * (fontSizePx * lineHeightRatio) > maxHeightPx && fontSizePx > minFontSizePx) {
       fontSizePx -= 1;
       setFontSizePx(fontSizePx);
       lines = layoutLines(fontSizePx);

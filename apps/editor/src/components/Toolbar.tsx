@@ -119,6 +119,8 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     content: template.defaultContent,
     fontFamily: template.fontFamily ?? DEFAULT_FONT_FAMILY,
     fontSizePt: template.fontSizePt,
+    minFontSizePt: template.minFontSizePt,
+    maxFontSizePt: template.maxFontSizePt,
     fontWeight: template.fontWeight,
     italic: template.isItalic,
     color: template.color,

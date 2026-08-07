@@ -12,7 +12,9 @@
       "fontWeight": "bold",
       "align": "left",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 10,
+      "maxFontSizePt": 16
     },
     {
       "id": "manaCost",
@@ -26,7 +28,9 @@
       "fontWeight": "normal",
       "align": "right",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 8,
+      "maxFontSizePt": 13
     },
     {
       "id": "nickname",
@@ -40,7 +44,9 @@
       "fontWeight": "normal",
       "align": "left",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 5,
+      "maxFontSizePt": 9
     },
     {
       "id": "typeline",
@@ -54,7 +60,9 @@
       "fontWeight": "normal",
       "align": "left",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 7,
+      "maxFontSizePt": 11
     },
     {
       "id": "rules",
@@ -68,7 +76,9 @@
       "fontWeight": "normal",
       "align": "left",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 5,
+      "maxFontSizePt": 10
     },
     {
       "id": "flavor",
@@ -82,7 +92,9 @@
       "fontWeight": "normal",
       "align": "left",
       "color": "#111111",
-      "isItalic": true
+      "isItalic": true,
+      "minFontSizePt": 5,
+      "maxFontSizePt": 9
     },
     {
       "id": "powerToughness",
@@ -96,7 +108,9 @@
       "fontWeight": "bold",
       "align": "center",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 8,
+      "maxFontSizePt": 13
     },
     {
       "id": "artist",
@@ -110,7 +124,9 @@
       "fontWeight": "normal",
       "align": "left",
       "color": "#111111",
-      "isItalic": false
+      "isItalic": false,
+      "minFontSizePt": 4,
+      "maxFontSizePt": 7
     }
   ],
   "categories": {
@@ -127,7 +143,9 @@
         "fontWeight": "bold",
         "align": "left",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 10,
+        "maxFontSizePt": 16
       },
       {
         "id": "manaCost",
@@ -141,7 +159,9 @@
         "fontWeight": "normal",
         "align": "right",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 8,
+        "maxFontSizePt": 13
       },
       {
         "id": "nickname",
@@ -155,7 +175,9 @@
         "fontWeight": "normal",
         "align": "left",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 5,
+        "maxFontSizePt": 9
       },
       {
         "id": "typeline",
@@ -169,7 +191,9 @@
         "fontWeight": "normal",
         "align": "left",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 7,
+        "maxFontSizePt": 11
       },
       {
         "id": "rules",
@@ -183,7 +207,9 @@
         "fontWeight": "normal",
         "align": "left",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 5,
+        "maxFontSizePt": 10
       },
       {
         "id": "flavor",
@@ -197,7 +223,9 @@
         "fontWeight": "normal",
         "align": "left",
         "color": "#111111",
-        "isItalic": true
+        "isItalic": true,
+        "minFontSizePt": 5,
+        "maxFontSizePt": 9
       },
       {
         "id": "powerToughness",
@@ -211,7 +239,9 @@
         "fontWeight": "bold",
         "align": "center",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 8,
+        "maxFontSizePt": 13
       },
       {
         "id": "artist",
@@ -225,7 +255,9 @@
         "fontWeight": "normal",
         "align": "left",
         "color": "#111111",
-        "isItalic": false
+        "isItalic": false,
+        "minFontSizePt": 4,
+        "maxFontSizePt": 7
       }
     ]
   }

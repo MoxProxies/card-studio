@@ -12,6 +12,14 @@ export interface TextFieldTemplate {
   width: number;
   height: number;
   fontSizePt: number;
+  /** Optional "fit within this range" boundaries — when both are set, a
+   * shrink-mode layer created from this field searches from maxFontSizePt
+   * down to minFontSizePt for the largest size that fits, instead of
+   * sitting fixed at fontSizePt: short content grows to fill the box
+   * rather than looking small inside it. Omit either (or both) to keep
+   * the original shrink-only-from-fontSizePt behavior. */
+  minFontSizePt?: number;
+  maxFontSizePt?: number;
   fontWeight: "normal" | "bold";
   isItalic: boolean;
   align: "left" | "center" | "right";

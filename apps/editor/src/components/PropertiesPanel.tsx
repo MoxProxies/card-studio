@@ -364,6 +364,45 @@ export function PropertiesPanel({ width }: { width: number }) {
               <option value="visible">Visible</option>
             </select>
           </div>
+          {layer.overflow === "shrink" && (
+            <div style={twoColStyle}>
+              <div style={fieldRowStyle}>
+                <span style={labelStyle} title="Leave blank to keep the original shrink-only-from-Size behavior">
+                  Min size (pt)
+                </span>
+                <input
+                  className="cs-input"
+                  type="number"
+                  min={1}
+                  value={layer.minFontSizePt ?? ""}
+                  onFocus={beginLiveEdit}
+                  onChange={(e) =>
+                    updateLayerLive(layer.id, { minFontSizePt: e.target.value === "" ? undefined : Number(e.target.value) })
+                  }
+                  onBlur={commitLiveEdit}
+                />
+              </div>
+              <div style={fieldRowStyle}>
+                <span
+                  style={labelStyle}
+                  title="Set this above Size to let short content grow and fill the box instead of sitting fixed at Size"
+                >
+                  Max size (pt)
+                </span>
+                <input
+                  className="cs-input"
+                  type="number"
+                  min={1}
+                  value={layer.maxFontSizePt ?? ""}
+                  onFocus={beginLiveEdit}
+                  onChange={(e) =>
+                    updateLayerLive(layer.id, { maxFontSizePt: e.target.value === "" ? undefined : Number(e.target.value) })
+                  }
+                  onBlur={commitLiveEdit}
+                />
+              </div>
+            </div>
+          )}
         </>
       )}
 

@@ -70,11 +70,18 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     const weight = layer.fontWeight === "bold" ? "bold" : "normal";
     const style = layer.italic ? "italic" : "normal";
     textFontStyle = [style === "italic" ? "italic" : "", weight === "bold" ? "bold" : ""].filter(Boolean).join(" ") || "normal";
-    const nominalFontSizePx = (layer.fontSizePt / 72) * EDITOR_DPI;
     const ctx = getMeasureCtx();
+    // maxFontSizePt (when set) is the search ceiling, not fontSizePt — lets
+    // short content grow into that headroom instead of sitting fixed at
+    // fontSizePt. Both are optional, template-defined "boundaries" (see
+    // TextFieldTemplate), converted at EDITOR_DPI so they read the same
+    // physical size on screen as they will in the print export.
+    const maxFontSizePx = ((layer.maxFontSizePt ?? layer.fontSizePt) / 72) * EDITOR_DPI;
+    const minFontSizePx = layer.minFontSizePt !== undefined ? (layer.minFontSizePt / 72) * EDITOR_DPI : undefined;
     textLayout = shrinkTextToFit({
       content: layer.content,
-      startFontSizePx: nominalFontSizePx,
+      startFontSizePx: maxFontSizePx,
+      minFontSizePx,
       maxWidthPx: mmToStagePx(layer.width),
       maxHeightPx: mmToStagePx(layer.height),
       lineHeightRatio: layer.lineHeight,

@@ -151,7 +151,14 @@ async function drawText(
 
   const { fontSizePx, lines } = shrinkTextToFit({
     content: layer.content,
-    startFontSizePx: ptToPx(layer.fontSizePt),
+    // maxFontSizePt (when set) is the search ceiling, not fontSizePt — lets
+    // short content grow into that headroom instead of sitting fixed at
+    // fontSizePt. minFontSizePt is the floor; both are optional, template-
+    // defined "boundaries" (see TextFieldTemplate / README's "MTG text
+    // fields"), converted through pt so the range is physically identical
+    // between the editor's preview DPI and this print DPI.
+    startFontSizePx: ptToPx(layer.maxFontSizePt ?? layer.fontSizePt),
+    minFontSizePx: layer.minFontSizePt !== undefined ? ptToPx(layer.minFontSizePt) : undefined,
     maxWidthPx: width,
     maxHeightPx: height,
     lineHeightRatio: layer.lineHeight,

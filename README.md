@@ -342,6 +342,28 @@ same "must actually be in the font catalog, or a system font" caveat as
 `DEFAULT_FONT_FAMILY` itself applies. Omit it to just use the default;
 none of the shipped fields set it.
 
+**`minFontSizePt`/`maxFontSizePt` let short content grow to fill the
+box, not just shrink when it overflows.** Every shipped field sets both
+— e.g. `rules` is `fontSizePt: 8` with `minFontSizePt: 5` /
+`maxFontSizePt: 10` — so a one-line ability fills more of the box at a
+larger, more legible size instead of sitting fixed at 8pt with mostly
+empty space below it, while a genuinely long rules-text block still
+shrinks down toward the 5pt floor the way `overflow: "shrink"` always
+has. `fontSizePt` itself becomes closer to a legacy/fallback value once
+a range is set — the search always starts from `maxFontSizePt` and works
+down, so it's really the range's boundaries doing the work, not the
+authored size. Omit either bound (or both) on a field to keep the
+original shrink-only-from-`fontSizePt` behavior exactly as it was.
+Editable per-layer too, not just per-template: the properties panel
+shows "Min size"/"Max size" fields under Overflow whenever a text
+layer's overflow is "Shrink to fit."
+
+Because inline symbols (see [Inline symbols in
+text](#inline-symbols-in-text) above) size themselves to the current
+font size (1em per symbol), a field that grows or shrinks to fill its
+box carries its mana/tap/untap symbols along with it automatically —
+there's no separate "symbol size" setting to keep in sync.
+
 Run `pnpm sync-text-templates` any time you add a new `frame-library/`
 category: it creates that category's `text-template-library/<category>.json`
 as a verbatim duplicate of `_base.json` if one doesn't already exist yet
@@ -641,9 +663,6 @@ Not implemented yet, but the shape of it:
 - Deploy config for either app
 - Inline symbols outside `overflow: "shrink"` (see [Inline symbols in
   text](#inline-symbols-in-text)'s known limitation)
-- "Grow to fill" text sizing — `shrinkTextToFit` only ever reduces
-  `fontSizePt` when content overflows; short content just renders at the
-  authored size, however small that looks in a large box. A template-
-  defined min/max range with the font size searching both directions
-  (not just down) is a natural extension of the same shrink loop, not
-  built yet
+- A wider symbol-library set (hybrid, Phyrexian, snow, energy, and the
+  rest of the mana/ability symbols beyond the initial w/u/b/r/g/c/t/q —
+  see [Inline symbols in text](#inline-symbols-in-text))
