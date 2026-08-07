@@ -2,17 +2,19 @@ import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import type { Layer } from "@card-studio/scene-schema";
-import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler } from "lucide-react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
 import { FrameLibraryModal } from "./FrameLibraryModal";
 import { TextTemplateMenu } from "./TextTemplateMenu";
+import { ScryfallSearchModal } from "./ScryfallSearchModal";
 import { getTextTemplates, type TextFieldTemplate } from "../textTemplates";
 import { getFrameAsset } from "../frameAssets";
 import { RARITY_ASSETS, getRarityAssetUrl } from "../rarityAssets";
 import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX } from "../rarityConfig";
 import { DEFAULT_FONT_FAMILY } from "../config";
+import { primaryCardFields, type ScryfallCard } from "../scryfall";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -27,10 +29,23 @@ async function getImageNaturalSize(file: File): Promise<{ width: number; height:
   return size;
 }
 
+/** Natural size of a remote image (e.g. Scryfall art) — same aspect-ratio
+ * need as getImageNaturalSize, but for a URL instead of a local File. */
+function getRemoteImageSize(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    img.src = src;
+  });
+}
+
 export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
   const addLayers = useDesignStore((s) => s.addLayers);
+  const replaceLayers = useDesignStore((s) => s.replaceLayers);
   const commitLayerChange = useDesignStore((s) => s.commitLayerChange);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
@@ -45,6 +60,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const panX = useDesignStore((s) => s.panX);
   const panY = useDesignStore((s) => s.panY);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
+  const [showScryfallSearch, setShowScryfallSearch] = useState(false);
 
   const centerBox = () => {
     const w = design.size.widthMm * 0.6;
@@ -154,6 +170,23 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     return ai - bi;
   });
 
+  const buildRarityLayer = (rarityId: string, url: string): Layer => ({
+    id: RARITY_LAYER_ID,
+    name: "Rarity Symbol",
+    type: "image",
+    assetId: rarityId,
+    src: url,
+    fit: "contain",
+    rotationDeg: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    x: cutOffsetX + RARITY_SYMBOL_BOX.x,
+    y: cutOffsetY + RARITY_SYMBOL_BOX.y,
+    width: RARITY_SYMBOL_BOX.width,
+    height: RARITY_SYMBOL_BOX.height,
+  });
+
   const setRarity = (rarityId: string) => {
     if (!rarityId) {
       if (rarityLayer) removeLayers([RARITY_LAYER_ID]);
@@ -165,22 +198,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       commitLayerChange(RARITY_LAYER_ID, { assetId: rarityId, src: url });
       return;
     }
-    addLayer({
-      id: RARITY_LAYER_ID,
-      name: "Rarity Symbol",
-      type: "image",
-      assetId: rarityId,
-      src: url,
-      fit: "contain",
-      rotationDeg: 0,
-      opacity: 1,
-      visible: true,
-      locked: false,
-      x: cutOffsetX + RARITY_SYMBOL_BOX.x,
-      y: cutOffsetY + RARITY_SYMBOL_BOX.y,
-      width: RARITY_SYMBOL_BOX.width,
-      height: RARITY_SYMBOL_BOX.height,
-    });
+    addLayer(buildRarityLayer(rarityId, url));
   };
 
   const addImage = async (file: File) => {
@@ -211,6 +229,93 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       width,
       height,
     });
+  };
+
+  // Field id -> Scryfall value, mirroring the ids text-template-library/
+  // fields use (title/manaCost/typeline/rules/flavor/powerToughness/
+  // artist) so each maps onto the matching resolved template. Nickname has
+  // no Scryfall equivalent and is deliberately left out — nothing to fill
+  // it with.
+  const scryfallFieldValues = (fields: ReturnType<typeof primaryCardFields>): Record<string, string | undefined> => ({
+    title: fields.name,
+    manaCost: fields.manaCost || undefined,
+    typeline: fields.typeLine || undefined,
+    rules: fields.oracleText || undefined,
+    flavor: fields.flavorText || undefined,
+    powerToughness: fields.powerToughness || undefined,
+    artist: fields.artist ? `Illus. ${fields.artist}` : undefined,
+  });
+
+  /**
+   * Adds all the text fields (and the card's own art, and its rarity
+   * symbol) a Scryfall card has data for, as one undo step. Only fields
+   * with an actual value get added — no placeholder text for e.g. a card
+   * with no flavor text. Art needs its natural size to size the layer
+   * without distortion (same reasoning as addImage), which is why this is
+   * async; everything else is synchronous once that resolves.
+   */
+  const importFromScryfall = async (card: ScryfallCard) => {
+    const fields = primaryCardFields(card);
+    const values = scryfallFieldValues(fields);
+
+    const textLayers = textTemplates
+      .filter((template) => values[template.id])
+      .map((template) => ({ ...templateToLayer(template), content: values[template.id]! }));
+
+    let artLayer: Layer | undefined;
+    if (fields.artCropUrl) {
+      try {
+        const { width: naturalWidth, height: naturalHeight } = await getRemoteImageSize(fields.artCropUrl);
+        const imageAspect = naturalWidth / naturalHeight;
+        const cutW = design.size.cutWidthMm;
+        const cutH = design.size.cutHeightMm;
+        const width = imageAspect > cutW / cutH ? cutW : cutH * imageAspect;
+        const height = imageAspect > cutW / cutH ? cutW / imageAspect : cutH;
+        artLayer = {
+          id: newId(),
+          name: `${fields.name} (art)`,
+          type: "image",
+          src: fields.artCropUrl,
+          fit: "cover",
+          rotationDeg: 0,
+          opacity: 1,
+          visible: true,
+          locked: false,
+          x: (design.size.widthMm - width) / 2,
+          y: (design.size.heightMm - height) / 2,
+          width,
+          height,
+        };
+      } catch {
+        // Art failed to load (network hiccup, hotlink block, ...) —
+        // everything else still gets added; add art manually if this happens.
+      }
+    }
+
+    // Art belongs *beneath* the frame (so the frame's transparent art
+    // window shows it) while text belongs on top of everything — addLayers
+    // always appends at the top, which can't express both in one step, so
+    // this builds the full array directly and commits it via replaceLayers.
+    const layers = [...design.layers];
+    if (artLayer) {
+      const frameIndex = layers.findIndex((l) => l.type === "frame");
+      if (frameIndex === -1) layers.unshift(artLayer);
+      else layers.splice(frameIndex, 0, artLayer);
+    }
+    layers.push(...textLayers);
+
+    if (fields.rarity && RARITY_ASSETS.some((r) => r.id === fields.rarity)) {
+      const url = getRarityAssetUrl(fields.rarity)!;
+      const existingRarityIndex = layers.findIndex((l) => l.id === RARITY_LAYER_ID);
+      if (existingRarityIndex !== -1) {
+        layers[existingRarityIndex] = { ...layers[existingRarityIndex]!, assetId: fields.rarity, src: url } as Layer;
+      } else {
+        layers.push(buildRarityLayer(fields.rarity, url));
+      }
+    }
+
+    const selectIds = [...(artLayer ? [artLayer.id] : []), ...textLayers.map((l) => l.id)];
+    replaceLayers(layers, selectIds);
   };
 
   const addShape = () =>
@@ -278,6 +383,9 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           </option>
         ))}
       </select>
+      <button className="cs-btn" onClick={() => setShowScryfallSearch(true)} title="Look up a real card and fill in its text fields, art, and rarity">
+        <Search size={16} /> Scryfall
+      </button>
 
       <div className="cs-divider" />
 
@@ -336,6 +444,16 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
             setShowFrameLibrary(false);
           }}
           onClose={() => setShowFrameLibrary(false)}
+        />
+      )}
+
+      {showScryfallSearch && (
+        <ScryfallSearchModal
+          onSelect={(card) => {
+            void importFromScryfall(card);
+            setShowScryfallSearch(false);
+          }}
+          onClose={() => setShowScryfallSearch(false)}
         />
       )}
     </div>

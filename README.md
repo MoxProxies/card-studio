@@ -70,6 +70,15 @@ The editor (`apps/editor`) currently supports:
 - A rarity dropdown places/swaps a rarity-symbol image layer at a
   config-adjustable position — see
   [Adding/changing rarity symbols](#addingchanging-rarity-symbols) below.
+- Text can mix `{W}`/`{T}`/`{2}`/etc. inline with plain characters,
+  wrapping and shrinking-to-fit right along with the surrounding words —
+  see [Inline symbols in text](#inline-symbols-in-text) below.
+- Text fields can grow (not just shrink) to fill their box, within a
+  template-defined min/max range — see [MTG text fields](#mtg-text-fields)
+  below.
+- A "Scryfall" search fills in all of a real card's text fields, its
+  artwork, and its rarity symbol in one click — see [Scryfall
+  import](#scryfall-import) below.
 
 ## Layout
 
@@ -428,6 +437,64 @@ each scaling from a different physical reference, so text rendered about
 export — meaning a shrink threshold computed from these numbers would've
 tripped at the wrong point. Fixed by deriving font size from
 `EDITOR_DPI` too, the same as everything else on the canvas.
+
+## Scryfall import
+
+The toolbar's "Scryfall" button opens a search box (`ScryfallSearchModal.tsx`)
+against [Scryfall's public card API](https://scryfall.com/docs/api) — no
+API key, CORS-enabled for direct browser calls (`scryfall.ts`). Type a
+card name, pick a result, and it adds — as a single undo step — whichever
+of the following the card actually has data for:
+
+- Title, mana cost, type line, rules text, flavor text, power/toughness,
+  and artist credit, each as a text layer built from the current
+  frame's resolved template (see [MTG text fields](#mtg-text-fields)) —
+  same placement/font/color a manually-added field would get, just with
+  Scryfall's content instead of the template's placeholder text. A field
+  with no data (e.g. no flavor text) is skipped outright rather than
+  adding an empty/placeholder layer. There's no template field for a
+  nickname, so that one's never filled from Scryfall.
+- The card's own illustration (`image_uris.art_crop` — the artwork
+  alone, no card frame around it, matching what an Image layer
+  underneath a Frame layer expects) as an Image layer, aspect-ratio-sized
+  the same way a manual upload is (`getImageNaturalSize`'s sibling
+  `getRemoteImageSize`, same reasoning). Inserted *beneath* the frame
+  layer if one exists (splicing into the layer array, not appended) so
+  the frame's transparent art window shows it, instead of covering the
+  frame the way appending on top would.
+- The rarity symbol, if `rarity` matches a `rarity-library/` id (common/
+  uncommon/rare/mythic already do) — reuses the same find-or-create
+  logic the rarity dropdown itself uses (`buildRarityLayer`, extracted
+  so both places build an identical layer shape).
+
+`addLayers` (used by "Add all fields") always appends at the top of the
+z-order, which can't express "art below the frame, text above it" in a
+single step — that combination needed a new store action,
+`replaceLayers(layers, selectIds)`, that commits a caller-computed full
+layer array as one undo step instead.
+
+**Mana cost and rules text map straight across almost for free** — this
+is why the inline-symbol token syntax (`{W}`, `{T}`, ...) was worth
+matching exactly to Scryfall's own: `mana_cost` and `oracle_text` already
+come back in that same curly-brace notation, so no translation step
+exists between "what Scryfall returns" and "what the text layer renders
+as symbols."
+
+Double-faced cards (transform, modal DFCs, ...) fall back to
+`card_faces[0]` for any field missing at the top level — Scryfall does
+this itself for `mana_cost`/`type_line`/`oracle_text`/power/toughness on
+these cards. Only the front face is used; there's no UI yet for picking
+a specific face.
+
+**Not verified against the live API from this environment** — this
+sandbox's outbound network policy blocks `api.scryfall.com` (confirmed:
+a direct request here gets rejected at the network layer), so the search/
+fetch/field-mapping/layer-creation pipeline was verified instead by
+mocking both endpoints with a fixture matching Scryfall's real response
+shape (`page.route()` in a throwaway Playwright script). The endpoint
+URLs and response shape are Scryfall's stable, long-documented public
+API; worth a real end-to-end smoke test once this runs somewhere with
+normal internet access.
 
 ## Design decisions
 

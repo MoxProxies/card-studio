@@ -57,6 +57,11 @@ export interface DesignState {
   addLayer: (layer: Layer) => void;
   /** Adds multiple layers as a single undo step (e.g. "add all text fields"). */
   addLayers: (layers: Layer[]) => void;
+  /** Replaces the whole layer array in one undo step, selecting `selectIds`
+   * — for operations needing specific z-order control addLayers's
+   * always-append can't give (e.g. Scryfall import slotting art beneath an
+   * existing frame while adding text fields on top, together). */
+  replaceLayers: (layers: Layer[], selectIds: string[]) => void;
   removeLayers: (ids: string[]) => void;
   duplicateLayers: (ids: string[]) => void;
   moveLayer: (id: string, direction: "up" | "down") => void;
@@ -133,6 +138,14 @@ export function createDesignStore(initialDesign: Design) {
         future: [],
         design: { ...state.design, layers: [...state.design.layers, ...layers] },
         selectedLayerIds: layers.map((l) => l.id),
+      })),
+
+    replaceLayers: (layers, selectIds) =>
+      set((state) => ({
+        past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+        future: [],
+        design: { ...state.design, layers },
+        selectedLayerIds: selectIds,
       })),
 
     removeLayers: (ids) =>
