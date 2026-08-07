@@ -2,6 +2,10 @@ import { create } from "zustand";
 import type { Design, Layer } from "@card-studio/scene-schema";
 
 const HISTORY_LIMIT = 50;
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 4;
+
+const clampZoom = (zoom: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
 
 function applyPatch(design: Design, id: string, patch: Partial<Layer>): Design {
   return {
@@ -31,8 +35,19 @@ export interface DesignState {
   selectedLayerIds: string[];
   /** View-only UI preference, not part of the design or undo history. */
   showSafeArea: boolean;
+  /** Canvas view transform (view-only, not part of the design or undo
+   * history). zoom 1 = the editor's native EDITOR_DPI resolution; pan is in
+   * screen pixels, applied to the pan/zoom Group, not the Stage itself. */
+  zoom: number;
+  panX: number;
+  panY: number;
 
   toggleSafeArea: () => void;
+  /** Sets zoom, optionally keeping a screen-space point (e.g. the cursor)
+   * stationary by adjusting pan to compensate. */
+  setZoom: (zoom: number, focal?: { x: number; y: number }) => void;
+  setPan: (x: number, y: number) => void;
+  panBy: (dxScreenPx: number, dyScreenPx: number) => void;
 
   selectOnly: (id: string | null) => void;
   toggleSelect: (id: string) => void;
@@ -70,8 +85,29 @@ export function createDesignStore(initialDesign: Design) {
     pendingSnapshot: null,
     selectedLayerIds: [],
     showSafeArea: true,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
 
     toggleSafeArea: () => set((state) => ({ showSafeArea: !state.showSafeArea })),
+
+    setZoom: (zoom, focal) =>
+      set((state) => {
+        const clamped = clampZoom(zoom);
+        if (!focal) return { zoom: clamped };
+        // Keep the model-space point currently under `focal` stationary on
+        // screen: solve for the new pan given the same local point at the
+        // new scale.
+        const localX = (focal.x - state.panX) / state.zoom;
+        const localY = (focal.y - state.panY) / state.zoom;
+        return {
+          zoom: clamped,
+          panX: focal.x - localX * clamped,
+          panY: focal.y - localY * clamped,
+        };
+      }),
+    setPan: (x, y) => set({ panX: x, panY: y }),
+    panBy: (dxScreenPx, dyScreenPx) => set((state) => ({ panX: state.panX + dxScreenPx, panY: state.panY + dyScreenPx })),
 
     selectOnly: (id) => set({ selectedLayerIds: id ? [id] : [] }),
     toggleSelect: (id) =>

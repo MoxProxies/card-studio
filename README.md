@@ -17,11 +17,14 @@ standalone dev server), but there's still no persistence/auth — see
 
 The editor (`apps/editor`) currently supports:
 - Add frame/text/image/shape layers; drag, resize, rotate via a Konva
-  Transformer. The canvas renders a workspace margin around the card
-  (`WORKSPACE_PADDING_PX`) so a layer larger than the card — or a
-  Transformer handle sitting right at the card's edge — has somewhere to
-  draw; without it, that content and those handles are simply clipped by
-  the canvas's own pixel bounds and become unreachable.
+  Transformer.
+- Pan and zoom: `Ctrl/Cmd`+scroll to zoom on the cursor, plain scroll to
+  pan, hold `Space`+drag or middle-mouse-drag to pan, plus a floating
+  zoom control (bottom-right of the canvas) with in/out/percentage-reset/
+  fit-to-view. A layer larger than the card, or a Transformer handle at
+  the card's edge, is always reachable by zooming out or panning — see
+  [Design decisions](#design-decisions) for why the Stage itself had to
+  become a viewport rather than just adding scale to it.
 - Imported images default to their own aspect ratio (contained within
   the cut area, centered) instead of a fixed box — a fixed box ignoring
   the source image's shape is what previously made every import come in
@@ -231,6 +234,38 @@ clipping it. Fixed by giving `.cs-input` `width: 100%; min-width: 0`
 `PropertiesPanel.tsx`/`LayerPanel.tsx` — the panels themselves also
 resized wider by default (300px) as a second line of defense, but that
 alone wouldn't have fixed it at any width.
+
+**Pan/zoom: the Stage is a viewport, not the card, scaled.** The obvious
+first approach — give the Stage the card's own scale/position and call it
+zoom — doesn't work: a `<canvas>` element's rendering is clipped to its
+own pixel dimensions regardless of any internal transform, so a
+card-sized Stage would clip anything panned or zoomed beyond those fixed
+bounds. That's the same class of bug as the earlier transform-handle
+clipping issue, just triggered by zoom instead of an oversized layer.
+The fix (`CanvasStage.tsx`) is the standard "camera" pattern: the Stage
+is sized to its own container (tracked with a `ResizeObserver`, so it
+tracks panel resizes and window resizes too) and never scaled; all card
+content — background, layers, guides, Transformer, even the marquee
+overlay — lives inside one `Group` that carries `x/y/scaleX/scaleY` for
+pan/zoom. Since Konva node coordinates for children of a transformed
+ancestor are unaffected by that ancestor's transform (only their
+*rendered* position/size changes), every existing piece of layer-drag,
+resize, and snap-guide math kept working unmodified — none of it was
+written in screen-pixel terms to begin with.
+
+Two things specifically needed to change for coordinates to still line
+up: marquee-selection now reads pointer position via the content
+`Group`'s `getRelativePointerPosition()` instead of the Stage's
+`getPointerPosition()`, so the drag rect comes out already in the same
+model space as layer bounding boxes regardless of current pan/zoom
+(no manual inverse-transform math needed). And PNG export
+(`export.ts`) has to divide its `pixelRatio` by the current zoom and
+crop from `{panX, panY, widthPx*zoom, heightPx*zoom}` instead of a fixed
+region — otherwise export resolution would silently depend on whatever
+zoom level happened to be on screen when you clicked Export (zoomed out
+50% would have halved the output resolution, since Konva scales up from
+however many pixels are actually rendered on screen, not from the card's
+native size).
 
 **Frame catalog is directory-driven, not hand-edited.** `frame-library/`
 at the repo root is the canonical source: one subfolder per category,

@@ -1,20 +1,36 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Stage, Layer as KonvaLayer, Group, Rect, Line, Transformer } from "react-konva";
 import type Konva from "konva";
+import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
-import { mmToStagePx, WORKSPACE_PADDING_PX } from "../geometry";
+import { MIN_ZOOM, MAX_ZOOM } from "../store/designStore";
+import { mmToStagePx } from "../geometry";
+import { isTypingTarget } from "../isTypingTarget";
 import { LayerNode } from "./LayerNode";
 
 const SNAP_THRESHOLD_PX = 6;
 const CLICK_DRAG_THRESHOLD_PX = 3;
+const FIT_MARGIN_PX = 40;
+const WHEEL_ZOOM_SPEED = 0.0015;
+const BUTTON_ZOOM_STEP = 1.2;
 
 type Guide = { points: number[] };
 type MarqueeRect = { x: number; y: number; width: number; height: number };
+type PanDrag = { startClientX: number; startClientY: number; startPanX: number; startPanY: number };
 
 /** The card canvas: renders every scene layer, cut-line and safe-area
  * guides, marquee (rubber-band) multi-select, alignment/snap guides while
- * dragging, and a shared Transformer bound to the current selection. */
+ * dragging, a shared Transformer bound to the current selection, and
+ * pan/zoom over an otherwise-fixed-resolution card.
+ *
+ * The Stage itself is sized to the *viewport* (this component's own
+ * container, tracked via ResizeObserver) and never scaled — all card
+ * content lives inside a single Group that carries the pan/zoom transform.
+ * Scaling the Stage directly would have re-introduced the old handle-
+ * clipping bug: a canvas element's own pixel bounds still clip whatever's
+ * drawn beyond them regardless of an internal transform, so the "camera"
+ * has to be the thing that's viewport-sized, not the card. */
 export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
@@ -24,7 +40,15 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   const setSelection = useDesignStore((s) => s.setSelection);
   const clearSelection = useDesignStore((s) => s.clearSelection);
   const commitLayerChanges = useDesignStore((s) => s.commitLayerChanges);
+  const zoom = useDesignStore((s) => s.zoom);
+  const panX = useDesignStore((s) => s.panX);
+  const panY = useDesignStore((s) => s.panY);
+  const setZoom = useDesignStore((s) => s.setZoom);
+  const setPan = useDesignStore((s) => s.setPan);
+  const panBy = useDesignStore((s) => s.panBy);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentGroupRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
   const [nodeRefs] = useState(() => new Map<string, Konva.Node>());
   const dragStartPositions = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -37,6 +61,11 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   const marqueeRectRef = useRef<MarqueeRect | null>(null);
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const panDragRef = useRef<PanDrag | null>(null);
+  const hasFramedRef = useRef(false);
 
   // Canvas text doesn't automatically repaint when a @font-face it depends
   // on finishes loading — react-konva only redraws in response to React
@@ -49,6 +78,36 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
     document.fonts.addEventListener("loadingdone", redraw);
     return () => document.fonts.removeEventListener("loadingdone", redraw);
   }, [stageRef]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setViewport({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Space-to-pan, matching Figma/Photoshop convention. Layers themselves
+  // stop being draggable while held (see LayerNode's panModeActive), so a
+  // space+drag never fights with Konva's own node-dragging underneath it.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !isTypingTarget(e.target)) setSpaceHeld(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") setSpaceHeld(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
 
   const widthPx = mmToStagePx(design.size.widthMm);
   const heightPx = mmToStagePx(design.size.heightMm);
@@ -66,6 +125,26 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   const safeHeightPx = mmToStagePx(design.size.safeHeightMm);
   const safeInsetXPx = (widthPx - safeWidthPx) / 2;
   const safeInsetYPx = (heightPx - safeHeightPx) / 2;
+
+  const fitToView = (capAt100: boolean) => {
+    if (viewport.width === 0 || viewport.height === 0) return;
+    const scaleX = (viewport.width - FIT_MARGIN_PX * 2) / widthPx;
+    const scaleY = (viewport.height - FIT_MARGIN_PX * 2) / heightPx;
+    let next = Math.min(scaleX, scaleY);
+    if (capAt100) next = Math.min(next, 1);
+    next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+    setZoom(next);
+    setPan((viewport.width - widthPx * next) / 2, (viewport.height - heightPx * next) / 2);
+  };
+
+  // Frame the card once, the first time the viewport size is known — after
+  // that, pan/zoom is entirely user-driven.
+  useEffect(() => {
+    if (hasFramedRef.current || viewport.width === 0 || viewport.height === 0) return;
+    hasFramedRef.current = true;
+    fitToView(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewport.width, viewport.height]);
 
   const attachTransformer = () => {
     const nodes = selectedLayerIds.map((id) => nodeRefs.get(id)).filter((n): n is Konva.Node => !!n);
@@ -193,10 +272,29 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
     commitLayerChanges(entries);
   };
 
+  const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    e.evt.preventDefault();
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+      const pointer = stageRef.current?.getPointerPosition();
+      if (!pointer) return;
+      setZoom(zoom * Math.exp(-e.evt.deltaY * WHEEL_ZOOM_SPEED), pointer);
+    } else {
+      panBy(-e.evt.deltaX, -e.evt.deltaY);
+    }
+  };
+
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
+    const isMiddlePan = e.evt.button === 1 && e.target === stage;
+    if (spaceHeld || isMiddlePan) {
+      e.evt.preventDefault();
+      panDragRef.current = { startClientX: e.evt.clientX, startClientY: e.evt.clientY, startPanX: panX, startPanY: panY };
+      setIsPanning(true);
+      return;
+    }
+
     if (!stage || e.target !== stage) return; // a shape handles its own click/select
-    const pos = stage.getPointerPosition();
+    const pos = contentGroupRef.current?.getRelativePointerPosition();
     if (!pos) return;
     marqueeStart.current = { x: pos.x, y: pos.y, additive: e.evt.shiftKey };
     marqueeRectRef.current = { x: pos.x, y: pos.y, width: 0, height: 0 };
@@ -204,9 +302,15 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   };
 
   const handleStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    if (panDragRef.current) {
+      const drag = panDragRef.current;
+      setPan(drag.startPanX + (e.evt.clientX - drag.startClientX), drag.startPanY + (e.evt.clientY - drag.startClientY));
+      return;
+    }
+
     const start = marqueeStart.current;
     if (!start) return;
-    const pos = e.target.getStage()?.getPointerPosition();
+    const pos = contentGroupRef.current?.getRelativePointerPosition();
     if (!pos) return;
     marqueeRectRef.current = {
       x: Math.min(start.x, pos.x),
@@ -218,6 +322,12 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   };
 
   const handleStageMouseUp = () => {
+    if (panDragRef.current) {
+      panDragRef.current = null;
+      setIsPanning(false);
+      return;
+    }
+
     const start = marqueeStart.current;
     const rect = marqueeRectRef.current;
     marqueeStart.current = null;
@@ -230,12 +340,12 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
       return;
     }
 
-    // rect is in absolute stage coordinates; layer bboxes are local to the
-    // card Group, offset by WORKSPACE_PADDING_PX within the stage.
+    // Both rect and layer bboxes are in the same model space here (children
+    // of the pan/zoom Group), so no coordinate conversion is needed.
     const hitIds = design.layers
       .filter((layer) => {
-        const lx = mmToStagePx(layer.x) + WORKSPACE_PADDING_PX;
-        const ly = mmToStagePx(layer.y) + WORKSPACE_PADDING_PX;
+        const lx = mmToStagePx(layer.x);
+        const ly = mmToStagePx(layer.y);
         const lw = mmToStagePx(layer.width);
         const lh = mmToStagePx(layer.height);
         return lx < rect.x + rect.width && lx + lw > rect.x && ly < rect.y + rect.height && ly + lh > rect.y;
@@ -245,105 +355,122 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
     setSelection(start.additive ? Array.from(new Set([...selectedLayerIds, ...hitIds])) : hitIds);
   };
 
-  const stageWidthPx = widthPx + WORKSPACE_PADDING_PX * 2;
-  const stageHeightPx = heightPx + WORKSPACE_PADDING_PX * 2;
+  const zoomFocal = () => ({ x: viewport.width / 2, y: viewport.height / 2 });
+  const cursor = isPanning ? "grabbing" : spaceHeld ? "grab" : "default";
 
   return (
-    <Stage
-      ref={stageRef}
-      width={stageWidthPx}
-      height={stageHeightPx}
-      onMouseDown={handleStageMouseDown}
-      onMouseMove={handleStageMouseMove}
-      onMouseUp={handleStageMouseUp}
+    <div
+      ref={containerRef}
+      className="cs-root"
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#e5e7eb", cursor }}
     >
-      <KonvaLayer>
-        {/* Workspace margin around the card, so oversized layers and
-            Transformer handles at/beyond the card's edge have somewhere to
-            render — see WORKSPACE_PADDING_PX. Non-listening so clicks here
-            still reach the Stage for marquee/deselect handling. */}
-        <Rect x={0} y={0} width={stageWidthPx} height={stageHeightPx} fill="#e5e7eb" listening={false} />
-
-        <Group x={WORKSPACE_PADDING_PX} y={WORKSPACE_PADDING_PX}>
-          {/* Decorative background — must not intercept pointer events, or every
-              click targets this Rect instead of the Stage and empty-canvas
-              click/marquee handling below never sees e.target === stage. */}
-          <Rect
-            x={0}
-            y={0}
-            width={widthPx}
-            height={heightPx}
-            fill={design.backgroundColor}
-            listening={false}
-            shadowColor="black"
-            shadowBlur={16}
-            shadowOpacity={0.25}
-          />
-
-          {design.layers.map((layer) => (
-            <LayerNode
-              key={layer.id}
-              layer={layer}
-              onSelect={(e) => {
-                if (e.evt.shiftKey) toggleSelect(layer.id);
-                else selectOnly(layer.id);
-              }}
-              registerRef={(node) => {
-                if (node) nodeRefs.set(layer.id, node);
-                else nodeRefs.delete(layer.id);
-                attachTransformer();
-              }}
-              onDragStart={handleLayerDragStart}
-              onDragMove={handleLayerDragMove}
-              onDragEnd={handleLayerDragEnd}
-            />
-          ))}
-
-          {/* Cut line — where the card is actually trimmed. Always shown. */}
-          <Rect
-            x={cutInsetXPx}
-            y={cutInsetYPx}
-            width={cutWidthPx}
-            height={cutHeightPx}
-            stroke="#ef4444"
-            dash={[4, 4]}
-            listening={false}
-          />
-
-          {/* Safe area — recommended inset from the cut line, toggle-able. */}
-          {showSafeArea && (
+      <Stage
+        ref={stageRef}
+        width={viewport.width}
+        height={viewport.height}
+        onWheel={handleWheel}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
+      >
+        <KonvaLayer>
+          <Group ref={contentGroupRef} x={panX} y={panY} scaleX={zoom} scaleY={zoom}>
+            {/* Decorative background — must not intercept pointer events, or every
+                click targets this Rect instead of the Stage and empty-canvas
+                click/marquee handling below never sees e.target === stage. */}
             <Rect
-              x={safeInsetXPx}
-              y={safeInsetYPx}
-              width={safeWidthPx}
-              height={safeHeightPx}
-              stroke="#f59e0b"
+              x={0}
+              y={0}
+              width={widthPx}
+              height={heightPx}
+              fill={design.backgroundColor}
+              listening={false}
+              shadowColor="black"
+              shadowBlur={16}
+              shadowOpacity={0.25}
+            />
+
+            {design.layers.map((layer) => (
+              <LayerNode
+                key={layer.id}
+                layer={layer}
+                panModeActive={spaceHeld}
+                onSelect={(e) => {
+                  if (e.evt.shiftKey) toggleSelect(layer.id);
+                  else selectOnly(layer.id);
+                }}
+                registerRef={(node) => {
+                  if (node) nodeRefs.set(layer.id, node);
+                  else nodeRefs.delete(layer.id);
+                  attachTransformer();
+                }}
+                onDragStart={handleLayerDragStart}
+                onDragMove={handleLayerDragMove}
+                onDragEnd={handleLayerDragEnd}
+              />
+            ))}
+
+            {/* Cut line — where the card is actually trimmed. Always shown. */}
+            <Rect
+              x={cutInsetXPx}
+              y={cutInsetYPx}
+              width={cutWidthPx}
+              height={cutHeightPx}
+              stroke="#ef4444"
               dash={[4, 4]}
               listening={false}
             />
-          )}
 
-          {guides.map((g, i) => (
-            <Line key={i} points={g.points} stroke="#ec4899" strokeWidth={1} dash={[4, 4]} listening={false} />
-          ))}
+            {/* Safe area — recommended inset from the cut line, toggle-able. */}
+            {showSafeArea && (
+              <Rect
+                x={safeInsetXPx}
+                y={safeInsetYPx}
+                width={safeWidthPx}
+                height={safeHeightPx}
+                stroke="#f59e0b"
+                dash={[4, 4]}
+                listening={false}
+              />
+            )}
 
-          <Transformer ref={transformerRef} rotateEnabled onTransformEnd={handleTransformEnd} />
-        </Group>
-      </KonvaLayer>
+            {guides.map((g, i) => (
+              <Line key={i} points={g.points} stroke="#ec4899" strokeWidth={1} dash={[4, 4]} listening={false} />
+            ))}
 
-      {marqueeRect && (
-        <KonvaLayer listening={false}>
-          <Rect
-            x={marqueeRect.x}
-            y={marqueeRect.y}
-            width={marqueeRect.width}
-            height={marqueeRect.height}
-            fill="rgba(59, 130, 246, 0.1)"
-            stroke="#3b82f6"
-            strokeWidth={1}
-          />
+            {marqueeRect && (
+              <Rect
+                x={marqueeRect.x}
+                y={marqueeRect.y}
+                width={marqueeRect.width}
+                height={marqueeRect.height}
+                fill="rgba(59, 130, 246, 0.1)"
+                stroke="#3b82f6"
+                strokeWidth={1 / zoom}
+                listening={false}
+              />
+            )}
+
+            <Transformer ref={transformerRef} rotateEnabled onTransformEnd={handleTransformEnd} />
+          </Group>
         </KonvaLayer>
-      )}
-    </Stage>
+      </Stage>
+
+      <div style={{ position: "absolute", right: 12, bottom: 12, display: "flex", gap: 4, background: "var(--cs-surface)", border: "1px solid var(--cs-border)", borderRadius: 8, padding: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+        <button className="cs-icon-btn" title="Zoom out" onClick={() => setZoom(zoom / BUTTON_ZOOM_STEP, zoomFocal())}>
+          <ZoomOut size={16} />
+        </button>
+        <button className="cs-btn" style={{ minWidth: 52, justifyContent: "center" }} title="Reset to 100%" onClick={() => setZoom(1, zoomFocal())}>
+          {Math.round(zoom * 100)}%
+        </button>
+        <button className="cs-icon-btn" title="Zoom in" onClick={() => setZoom(zoom * BUTTON_ZOOM_STEP, zoomFocal())}>
+          <ZoomIn size={16} />
+        </button>
+        <div className="cs-divider" />
+        <button className="cs-icon-btn" title="Fit to view" onClick={() => fitToView(false)}>
+          <Maximize size={16} />
+        </button>
+      </div>
+    </div>
   );
 }

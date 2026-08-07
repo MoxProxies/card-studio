@@ -12,12 +12,15 @@ interface LayerNodeProps {
   onDragStart: () => void;
   onDragMove: (node: Konva.Node) => void;
   onDragEnd: (node: Konva.Node) => void;
+  /** True while space-to-pan is active: layers must not be draggable, or a
+   * space+drag on top of one would fight with Konva's own node dragging. */
+  panModeActive: boolean;
 }
 
 /** Renders one scene layer as Konva node(s). Position/transform math and
  * history commits live in CanvasStage — this component only forwards
  * gesture events for the node it owns. */
-export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMove, onDragEnd }: LayerNodeProps) {
+export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMove, onDragEnd, panModeActive }: LayerNodeProps) {
   // Hooks must run unconditionally on every render of this instance.
   const image = useHtmlImage(layer.type === "image" ? layer.src : undefined);
   const frameAssetUrl = layer.type === "frame" ? getFrameAssetUrl(layer.assetId) : undefined;
@@ -31,7 +34,7 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     height: mmToStagePx(layer.height),
     rotation: layer.rotationDeg,
     opacity: layer.opacity,
-    draggable: !layer.locked,
+    draggable: !layer.locked && !panModeActive,
     visible: layer.visible,
     onClick: onSelect,
     onTap: onSelect,

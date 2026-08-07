@@ -29,7 +29,7 @@ export function App() {
     <div className="cs-root" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui, sans-serif" }}>
       <Toolbar stageRef={stageRef} />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6", overflow: "auto" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <CanvasStage stageRef={stageRef} />
         </div>
 

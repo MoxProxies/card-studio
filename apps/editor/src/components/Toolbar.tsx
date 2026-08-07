@@ -37,6 +37,9 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const canRedo = useDesignStore((s) => s.future.length > 0);
   const showSafeArea = useDesignStore((s) => s.showSafeArea);
   const toggleSafeArea = useDesignStore((s) => s.toggleSafeArea);
+  const zoom = useDesignStore((s) => s.zoom);
+  const panX = useDesignStore((s) => s.panX);
+  const panY = useDesignStore((s) => s.panY);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
 
   const centerBox = () => {
@@ -169,7 +172,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const handleExport = () => {
     const stage = stageRef.current;
     if (!stage) return;
-    const dataUrl = exportStageToPngDataUrl(stage, design.size, PRINT_DPI);
+    const dataUrl = exportStageToPngDataUrl(stage, design.size, PRINT_DPI, { panX, panY, zoom });
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = `${design.name || "card"}.png`;

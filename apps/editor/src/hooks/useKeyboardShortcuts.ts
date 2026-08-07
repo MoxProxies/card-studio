@@ -1,13 +1,9 @@
 import { useEffect } from "react";
 import { useDesignStore } from "../store/DesignProvider";
+import { isTypingTarget } from "../isTypingTarget";
 
 const NUDGE_MM = 0.5;
 const NUDGE_MM_LARGE = 5;
-
-function isTypingTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false;
-  return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
-}
 
 /** Delete/backspace, arrow-key nudge, ctrl/cmd+Z undo, ctrl/cmd+shift+Z (or ctrl+Y) redo,
  * ctrl/cmd+D duplicate, Escape to clear selection. Disabled while typing in an input. */
