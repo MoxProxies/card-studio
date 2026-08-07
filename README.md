@@ -240,11 +240,20 @@ text-template-library/
 Each file is a JSON array of the standard fields (title, nickname, mana
 cost, typeline, rules, flavor, power/toughness, artist/credit) — each
 field's `x`/`y`/`width`/`height` (mm, relative to the *cut* corner, not
-the full-bleed canvas), font settings, and `color` are independent
-values, not derived from a shared grid formula. That's deliberate: if
-one field looks slightly off against a particular frame, open that
-frame's category file and adjust just that field's numbers — nothing
-else depends on them or needs to change in step.
+the full-bleed canvas), `fontSizePt`/`fontWeight`/`isItalic`, `align`,
+and `color` are independent values, not derived from a shared grid
+formula. That's deliberate: if one field looks slightly off against a
+particular frame, open that frame's category file and adjust just that
+field's numbers — nothing else depends on them or needs to change in
+step. `flavor` starts `isItalic: true` in both `_base.json` and
+`classic.json` (conventional for MTG flavor text); every other field
+defaults to `false`.
+
+An optional `fontFamily` on a field overrides `DEFAULT_FONT_FAMILY`
+(`config.ts`) just for that field — e.g. a script face for flavor text —
+same "must actually be in the font catalog, or a system font" caveat as
+`DEFAULT_FONT_FAMILY` itself applies. Omit it to just use the default;
+none of the shipped fields set it.
 
 Run `pnpm sync-text-templates` any time you add a new `frame-library/`
 category: it creates that category's `text-template-library/<category>.json`

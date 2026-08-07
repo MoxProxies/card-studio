@@ -13,9 +13,15 @@ export interface TextFieldTemplate {
   height: number;
   fontSizePt: number;
   fontWeight: "normal" | "bold";
+  isItalic: boolean;
   align: "left" | "center" | "right";
   /** Fill color a text layer created from this field starts with. */
   color: string;
+  /** Overrides DEFAULT_FONT_FAMILY (config.ts) for this field specifically
+   * when set — e.g. a script face for flavor text. Must name a family
+   * that's actually in the font catalog (or a system font), same caveat
+   * as DEFAULT_FONT_FAMILY itself. Omit to just use the default. */
+  fontFamily?: string;
 }
 
 interface TextTemplateCatalog {
