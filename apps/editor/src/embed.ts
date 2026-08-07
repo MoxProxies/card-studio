@@ -4,10 +4,14 @@ import { Design, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/s
 import { DesignProvider } from "./store/DesignProvider";
 import { createDesignStore, type DesignStore } from "./store/designStore";
 import { App } from "./App";
-// Imported as a raw string (not injected into document.head) because this
+// Imported as raw strings (not injected into document.head) because this
 // element renders into a shadow root — a global <style> tag can't cross the
-// shadow boundary, so the CSS has to be inlined inside it directly.
+// shadow boundary, so the CSS has to be inlined inside it directly. This
+// applies to @font-face too: a shadow root's own stylesheet can declare
+// fonts and use them for text inside that shadow tree.
 import styles from "./styles.css?inline";
+import fontFaces from "./fonts.generated.css?inline";
+import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
 
 /**
  * <card-studio-editor> — the integration surface for moxproxies-website.
@@ -36,8 +40,12 @@ export class CardStudioEditorElement extends HTMLElement {
 
     const shadow = this.shadowRoot ?? this.attachShadow({ mode: "open" });
     const styleEl = document.createElement("style");
-    styleEl.textContent = styles;
+    styleEl.textContent = `${styles}\n${fontFaces}`;
     shadow.appendChild(styleEl);
+    // @font-face registration is document-global even when declared inside
+    // a shadow root's stylesheet — safe to preload once the <style> above
+    // is actually in the DOM.
+    preloadEmbeddedFonts();
 
     const container = document.createElement("div");
     container.style.width = "100%";

@@ -4,6 +4,10 @@ import { createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/scene-sch
 import { DesignProvider } from "./store/DesignProvider";
 import { App } from "./App";
 import "./styles.css";
+import "./fonts.generated.css";
+import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
+
+preloadEmbeddedFonts();
 
 const design = createEmptyDesign(crypto.randomUUID(), STANDARD_CARD_SIZE_MM);
 

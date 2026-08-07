@@ -79,6 +79,12 @@
 }
 
 .cs-input {
+  /* width:100% + min-width:0 so inputs shrink to fit their flex/grid cell
+   * instead of keeping their intrinsic browser width (a <input type=number>
+   * defaults wider than a narrow grid column) — that mismatch is what let
+   * panel content overflow past its own container's edge. */
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--cs-border-strong);
   border-radius: 6px;
   padding: 5px 7px;
@@ -109,4 +115,13 @@
 }
 .cs-swatch.cs-active {
   border-color: var(--cs-accent);
+}
+
+.cs-resize-handle > div {
+  border-radius: 2px;
+  transition: background 120ms ease;
+}
+.cs-resize-handle:hover > div,
+.cs-resize-handle:active > div {
+  background: var(--cs-accent);
 }

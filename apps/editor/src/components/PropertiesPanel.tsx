@@ -21,23 +21,25 @@ import {
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
 import { getFrameAsset } from "../frameAssets";
+import { EMBEDDED_FONT_FAMILIES, SYSTEM_FONT_FALLBACKS } from "../fontAssets";
 import { FrameLibraryModal } from "./FrameLibraryModal";
 
-const FONT_OPTIONS = ["Inter", "Arial", "Georgia", "Times New Roman", "Courier New", "Trebuchet MS"];
-
-const panelStyle: CSSProperties = {
-  width: 260,
+const getPanelStyle = (width: number): CSSProperties => ({
+  width,
+  flex: "none",
+  minWidth: 0,
   borderLeft: "1px solid var(--cs-border)",
   padding: 12,
   overflowY: "auto",
+  overflowX: "hidden",
   fontSize: 13,
-};
+});
 const headingStyle: CSSProperties = { fontSize: 13, fontWeight: 600, margin: "0 0 10px" };
-const fieldRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 3, marginBottom: 8 };
-const twoColStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 };
+const fieldRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 3, marginBottom: 8, minWidth: 0 };
+const twoColStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, minWidth: 0 };
 const labelStyle: CSSProperties = { color: "var(--cs-text-muted)", fontSize: 11 };
 
-export function PropertiesPanel() {
+export function PropertiesPanel({ width }: { width: number }) {
   const design = useDesignStore((s) => s.design);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const commitLayerChange = useDesignStore((s) => s.commitLayerChange);
@@ -67,7 +69,7 @@ export function PropertiesPanel() {
 
   if (selectedLayers.length === 0) {
     return (
-      <div className="cs-root" style={panelStyle} data-testid="properties-panel">
+      <div className="cs-root" style={getPanelStyle(width)} data-testid="properties-panel">
         <p style={{ color: "var(--cs-text-muted)", fontSize: 12 }}>Select a layer to edit its properties.</p>
       </div>
     );
@@ -75,7 +77,7 @@ export function PropertiesPanel() {
 
   if (selectedLayers.length > 1) {
     return (
-      <div className="cs-root" style={panelStyle} data-testid="properties-panel">
+      <div className="cs-root" style={getPanelStyle(width)} data-testid="properties-panel">
         <h3 style={headingStyle} data-testid="multi-select-heading">{selectedLayers.length} layers selected</h3>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Align to card</span>
@@ -139,7 +141,7 @@ export function PropertiesPanel() {
   });
 
   return (
-    <div className="cs-root" style={panelStyle} data-testid="properties-panel">
+    <div className="cs-root" style={getPanelStyle(width)} data-testid="properties-panel">
       <h3 style={headingStyle}>{layer.name}</h3>
 
       <div style={fieldRowStyle}>
@@ -260,11 +262,20 @@ export function PropertiesPanel() {
               value={layer.fontFamily}
               onChange={(e) => commitLayerChange(layer.id, { fontFamily: e.target.value })}
             >
-              {FONT_OPTIONS.map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
+              <optgroup label="Embedded">
+                {EMBEDDED_FONT_FAMILIES.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="System (may not print consistently)">
+                {SYSTEM_FONT_FALLBACKS.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
           <div style={twoColStyle}>

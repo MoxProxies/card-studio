@@ -1,11 +1,15 @@
 import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
+import type { Layer } from "@card-studio/scene-schema";
 import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
 import { FrameLibraryModal } from "./FrameLibraryModal";
+import { TextTemplateMenu } from "./TextTemplateMenu";
+import { MTG_TEXT_TEMPLATES, type TextFieldTemplate } from "../textTemplates";
+import { DEFAULT_FONT_FAMILY } from "../config";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -23,6 +27,7 @@ async function getImageNaturalSize(file: File): Promise<{ width: number; height:
 export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
+  const addLayers = useDesignStore((s) => s.addLayers);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
   const removeLayers = useDesignStore((s) => s.removeLayers);
@@ -70,7 +75,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       name: "Text",
       type: "text",
       content: "New text",
-      fontFamily: "Inter",
+      fontFamily: DEFAULT_FONT_FAMILY,
       fontSizePt: 14,
       fontWeight: "normal",
       color: "#111111",
@@ -83,6 +88,37 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       locked: false,
       ...centerBox(),
     });
+
+  // MTG_TEXT_TEMPLATES positions are relative to the cut/trim corner, not
+  // the full-bleed canvas layers actually live in — offset by the same
+  // margin the cut-line guide uses.
+  const cutOffsetX = (design.size.widthMm - design.size.cutWidthMm) / 2;
+  const cutOffsetY = (design.size.heightMm - design.size.cutHeightMm) / 2;
+
+  const templateToLayer = (template: TextFieldTemplate): Layer => ({
+    id: newId(),
+    name: template.label,
+    type: "text",
+    content: template.defaultContent,
+    fontFamily: DEFAULT_FONT_FAMILY,
+    fontSizePt: template.fontSizePt,
+    fontWeight: template.fontWeight,
+    color: "#111111",
+    align: template.align,
+    lineHeight: 1.15,
+    overflow: "shrink",
+    rotationDeg: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    x: cutOffsetX + template.x,
+    y: cutOffsetY + template.y,
+    width: template.width,
+    height: template.height,
+  });
+
+  const addTextField = (template: TextFieldTemplate) => addLayer(templateToLayer(template));
+  const addAllTextFields = () => addLayers(MTG_TEXT_TEMPLATES.map(templateToLayer));
 
   const addImage = async (file: File) => {
     const src = URL.createObjectURL(file);
@@ -148,6 +184,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       <button className="cs-btn" onClick={addText}>
         <Type size={16} /> Text
       </button>
+      <TextTemplateMenu onAdd={addTextField} onAddAll={addAllTextFields} />
       <button className="cs-btn" onClick={addShape}>
         <Shapes size={16} /> Shape
       </button>

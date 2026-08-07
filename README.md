@@ -47,6 +47,18 @@ The editor (`apps/editor`) currently supports:
 - Icons throughout (`lucide-react`) with a small shared stylesheet
   (`src/styles.css`) for consistent buttons/inputs — see the shadow-DOM
   note below for why it's `.cs-root` and not `:root`.
+- The three-pane layout (canvas / layers / properties) is resizable —
+  drag the handles between panels. The canvas area is always `flex: 1`
+  (whatever's left over); only the two side panels have explicit,
+  draggable widths (`App.tsx`, `ResizeHandle.tsx`).
+- A "Text Fields" menu inserts the standard MTG text fields (title,
+  mana cost, nickname, typeline, rules, flavor, P/T, artist/credit) at
+  positions matching a classic MTG layout, individually or all at once
+  — see [MTG text fields](#mtg-text-fields) below.
+- Embedded fonts: a folder-driven catalog (parallel to the frame
+  library) with a dropdown in the properties panel, and a config
+  constant for the default new text starts with — see
+  [Adding fonts](#adding-fonts) below.
 
 ## Layout
 
@@ -96,6 +108,78 @@ example of drawing a frame this way with `@napi-rs/canvas`; it's also
 the script to rerun (writing into `frame-library/classic/`, then sync)
 if you want to tweak the 6 built-in placeholder designs.
 
+## Adding fonts
+
+1. Drop a font file into `font-library/<Family Name>/<weight>.woff2` (or
+   `.woff`/`.ttf`/`.otf`), e.g. `font-library/Playfair Display/700.woff2`.
+   `<weight>` must be the CSS font-weight number for that file — 400 for
+   regular, 700 for bold. A font used at both weights needs both files;
+   the current `fontWeight` field only distinguishes normal/bold (no
+   italic yet), so that's all two files buys you today.
+2. Run `pnpm sync-fonts`. This copies the file into both
+   `apps/editor/public/fonts/` and `services/render/assets/fonts/`,
+   regenerates both `fontCatalog.generated.json` files, and regenerates
+   `apps/editor/src/fonts.generated.css` (the `@font-face` rules the
+   browser needs).
+3. Commit everything sync touched.
+
+The new family shows up in the properties panel's font dropdown (under
+"Embedded") immediately — no other code change needed. To change what
+*new* text layers default to, edit `DEFAULT_FONT_FAMILY` in
+`apps/editor/src/config.ts`; it must name a family that's actually in the
+catalog (or a system font), otherwise it silently falls back to whatever
+the browser picks and print output won't match what the editor showed.
+
+The repo ships with [Inter](https://github.com/rsms/inter) (regular +
+bold) under the SIL Open Font License 1.1 — see
+`font-library/Inter/LICENSE.txt` — sourced from the `@fontsource/inter`
+npm package's static files (that package isn't a runtime dependency;
+only its files were copied in).
+
+**Print exports must use the same font the editor showed, or the
+"preview" lied.** `services/render/src/fontAssets.ts` registers every
+embedded font with `@napi-rs/canvas`'s `GlobalFonts.registerFromPath()`
+once at server startup (called from `server.ts`), so `ctx.font = "bold
+16px Inter"` in `renderDesign.ts` resolves to the actual embedded Inter
+Bold file instead of silently substituting a system font server-side.
+Confirmed this actually works before relying on it: `GlobalFonts`
+registration accepts `.woff2` directly (no need to also ship `.ttf` for
+the Node side), and registering two weight files under the same family
+name correctly resolves per-weight when `ctx.font` asks for `bold` vs
+normal.
+
+**Canvas text doesn't wait for its own webfont to load.** The first text
+layer on a freshly loaded page could render in the browser's fallback
+font, then look fine forever after — because `@font-face` alone doesn't
+make a `<canvas>` `fillText()` call wait for the font file to download;
+that's a DOM-text behavior, not a canvas one, and react-konva only
+redraws in response to React prop changes, which font loading isn't.
+Fixed two ways: `loadEmbeddedFonts.ts`'s `preloadEmbeddedFonts()` (called
+from both `main.tsx` and `embed.ts`) explicitly kicks off every embedded
+family/weight via the CSS Font Loading API (`document.fonts.load(...)`)
+as early as possible, and `CanvasStage.tsx` calls `stage.batchDraw()`
+once `document.fonts.ready` resolves (plus on every `loadingdone` event,
+in case something loads later) so an in-flight load still gets picked up
+even if the preload race is lost. Reproduced the bug and confirmed the
+fix by screenshotting a text layer added within ~150ms of page load,
+before and after.
+
+## MTG text fields
+
+`apps/editor/src/textTemplates.ts` defines the standard fields (title,
+nickname, mana cost, typeline, rules, flavor, power/toughness,
+artist/credit) as independent constants — each field's `x`/`y`/`width`/
+`height` (mm, relative to the *cut* corner, not the full-bleed canvas)
+and font settings are hand-picked to roughly match a classic MTG layout,
+not derived from a shared grid formula. That's deliberate: if one field
+looks slightly off against a particular frame, open this file and adjust
+just that field's numbers — nothing else depends on them or needs to
+change in step. The "Text Fields" toolbar menu (`TextTemplateMenu.tsx`)
+converts a template to an actual text layer (offsetting by the
+cut-to-canvas margin) when you pick one, or all eight when you pick
+"Add all fields" — the latter lands as a single undo step
+(`addLayers` in the store), not eight.
+
 ## Design decisions
 
 **Scene JSON is DPI-independent (millimeters, not pixels).** A `Design`
@@ -134,6 +218,19 @@ to feed. See `packages/scene-schema/src/schema.ts` and
   source spec, not a bug. Get this wrong and print jobs come back with
   content cut off or a border of unprinted white — it's worth reading
   `units.ts`'s comment before changing any of these numbers.
+
+**Panel content overflowing its own container was a missing `width:
+100%`, not a sizing problem.** The properties panel used to overflow
+horizontally past its own edge regardless of how wide it was given,
+because `.cs-input` had no explicit width — a `<input type="number">`
+without one keeps its browser-intrinsic width, which is wider than a
+narrow two-column grid cell, and a flex/grid item's default `min-width:
+auto` lets it force the *container* wider to fit that content instead of
+clipping it. Fixed by giving `.cs-input` `width: 100%; min-width: 0`
+(`styles.css`) and `minWidth: 0` on the grid/flex containers in
+`PropertiesPanel.tsx`/`LayerPanel.tsx` — the panels themselves also
+resized wider by default (300px) as a second line of defense, but that
+alone wouldn't have fixed it at any width.
 
 **Frame catalog is directory-driven, not hand-edited.** `frame-library/`
 at the repo root is the canonical source: one subfolder per category,
@@ -250,14 +347,16 @@ Not implemented yet, but the shape of it:
 
 ## Not built yet
 
-- In-app frame upload (adding a frame is a file-drop + `pnpm sync-frames`
-  + commit workflow today — see [Adding frames](#adding-frames) — not a
+- In-app frame/font upload (adding either is a file-drop + `pnpm
+  sync-frames`/`sync-fonts` + commit workflow today — see
+  [Adding frames](#adding-frames) / [Adding fonts](#adding-fonts) — not a
   button in the UI; there's also no way yet for a running deployment to
-  pick up a new frame without a rebuild/redeploy)
-- Persistence (saving/loading designs — currently all in-memory)
+  pick up a new frame or font without a rebuild/redeploy)
+- Persistence (saving/loading designs — currently all in-memory,
+  including panel widths and the safe-area toggle, which reset on reload)
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare
   render endpoint, no auth, no storage of results)
-- Font upload/custom fonts (properties panel offers a fixed list of
-  system fonts today)
+- Italic/oblique text (only normal/bold weight today — matters for
+  flavor text, which is conventionally italicized)
 - Deploy config for either app

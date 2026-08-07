@@ -1,6 +1,9 @@
 import Fastify from "fastify";
 import { Design, PRINT_DPI } from "@card-studio/scene-schema";
 import { renderDesign } from "./renderDesign.js";
+import { registerEmbeddedFonts } from "./fontAssets.js";
+
+registerEmbeddedFonts();
 
 const app = Fastify({ logger: true });
 

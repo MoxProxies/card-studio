@@ -9,7 +9,7 @@ const TYPE_ICONS: Record<Layer["type"], typeof Frame> = {
   image: ImageIcon,
 };
 
-export function LayerPanel() {
+export function LayerPanel({ width }: { width: number }) {
   const layers = useDesignStore((s) => s.design.layers);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const selectOnly = useDesignStore((s) => s.selectOnly);
@@ -19,7 +19,10 @@ export function LayerPanel() {
   const commitLayerChange = useDesignStore((s) => s.commitLayerChange);
 
   return (
-    <div className="cs-root" style={{ width: 240, borderLeft: "1px solid var(--cs-border)", padding: 8, overflowY: "auto" }}>
+    <div
+      className="cs-root"
+      style={{ width, flex: "none", minWidth: 0, borderLeft: "1px solid var(--cs-border)", padding: 8, overflowY: "auto", overflowX: "hidden" }}
+    >
       <h3 style={{ fontSize: 13, fontWeight: 600, margin: "4px 0 8px" }}>Layers</h3>
       {[...layers].reverse().map((layer) => {
         const isSelected = selectedLayerIds.includes(layer.id);
@@ -43,7 +46,7 @@ export function LayerPanel() {
             }}
           >
             <TypeIcon size={14} color="var(--cs-text-muted)" style={{ flex: "none" }} />
-            <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {layer.name}
             </span>
             <button

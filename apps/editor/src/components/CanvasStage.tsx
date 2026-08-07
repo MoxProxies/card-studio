@@ -38,6 +38,18 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const [guides, setGuides] = useState<Guide[]>([]);
 
+  // Canvas text doesn't automatically repaint when a @font-face it depends
+  // on finishes loading — react-konva only redraws in response to React
+  // prop changes, and font loading is async and outside that loop. Without
+  // this, text can render in the browser's fallback font on first paint
+  // and only pick up the real embedded font on the next unrelated redraw.
+  useEffect(() => {
+    const redraw = () => stageRef.current?.batchDraw();
+    document.fonts.ready.then(redraw);
+    document.fonts.addEventListener("loadingdone", redraw);
+    return () => document.fonts.removeEventListener("loadingdone", redraw);
+  }, [stageRef]);
+
   const widthPx = mmToStagePx(design.size.widthMm);
   const heightPx = mmToStagePx(design.size.heightMm);
 

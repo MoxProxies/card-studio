@@ -1,0 +1,17 @@
+[
+  {
+    "family": "Inter",
+    "weights": [
+      {
+        "weight": 400,
+        "fileName": "400.woff2",
+        "format": "woff2"
+      },
+      {
+        "weight": 700,
+        "fileName": "700.woff2",
+        "format": "woff2"
+      }
+    ]
+  }
+]
