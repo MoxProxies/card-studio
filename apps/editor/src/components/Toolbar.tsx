@@ -11,6 +11,13 @@ function newId(): string {
 export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
+  const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
+  const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
+  const removeLayers = useDesignStore((s) => s.removeLayers);
+  const undo = useDesignStore((s) => s.undo);
+  const redo = useDesignStore((s) => s.redo);
+  const canUndo = useDesignStore((s) => s.past.length > 0);
+  const canRedo = useDesignStore((s) => s.future.length > 0);
 
   const centerBox = () => {
     const w = design.size.widthMm * 0.6;
@@ -75,6 +82,22 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     });
   };
 
+  const addShape = () =>
+    addLayer({
+      id: newId(),
+      name: "Shape",
+      type: "shape",
+      shape: "rect",
+      fill: "#93c5fd",
+      strokeWidthMm: 0,
+      cornerRadiusMm: 0,
+      rotationDeg: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      ...centerBox(),
+    });
+
   const handleExport = () => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -89,6 +112,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     <div style={{ display: "flex", gap: 8, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
       <button onClick={addFrame}>+ Frame</button>
       <button onClick={addText}>+ Text</button>
+      <button onClick={addShape}>+ Shape</button>
       <label style={{ cursor: "pointer" }}>
         + Image
         <input
@@ -102,6 +126,22 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           }}
         />
       </label>
+
+      <div style={{ width: 1, background: "#e5e7eb", margin: "0 4px" }} />
+
+      <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">
+        ↩ Undo
+      </button>
+      <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl/Cmd+Shift+Z)">
+        ↪ Redo
+      </button>
+      <button onClick={() => duplicateLayers(selectedLayerIds)} disabled={selectedLayerIds.length === 0} title="Duplicate (Ctrl/Cmd+D)">
+        Duplicate
+      </button>
+      <button onClick={() => removeLayers(selectedLayerIds)} disabled={selectedLayerIds.length === 0} title="Delete (Del)">
+        Delete
+      </button>
+
       <div style={{ flex: 1 }} />
       <span style={{ alignSelf: "center", color: "#6b7280", fontSize: 12 }}>
         {design.size.widthMm}×{design.size.heightMm}mm

@@ -10,9 +10,22 @@ and "injected" into that site rather than merged into its codebase.
 ## Status
 
 Early scaffold. The pieces below are wired together and verified working
-end-to-end (typecheck, build, and a real render smoke test), but the
-editor only has placeholder frame art and no persistence/auth yet — see
-[Not built yet](#not-built-yet).
+end-to-end (typecheck, build, a real render smoke test, and browser-driven
+UX checks), but the editor only has placeholder frame art and no
+persistence/auth yet — see [Not built yet](#not-built-yet).
+
+The editor (`apps/editor`) currently supports:
+- Add frame/text/image/shape layers; drag, resize, rotate via a Konva
+  Transformer.
+- Multi-select: shift-click, or marquee (rubber-band) select on empty
+  canvas.
+- Alignment/snap guides while dragging a single layer (snaps to other
+  layers' edges/centers and the card's edges/center).
+- Undo/redo (`Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z`), duplicate (`Ctrl/Cmd+D`),
+  delete (`Del`/`Backspace`), arrow-key nudge (`Shift` for a larger step).
+- A properties panel: position/size/rotation/opacity, per-type fields
+  (font/size/weight/color/align for text, tint for frames, fill/stroke
+  for shapes, fit for images), and "align to card" for multi-select.
 
 ## Layout
 
@@ -105,5 +118,6 @@ Not implemented yet, but the shape of it:
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare
   render endpoint, no auth, no storage of results)
-- Undo/redo, multi-select, alignment guides, font picker/upload
+- Font upload/custom fonts (properties panel offers a fixed list of
+  system fonts today)
 - Deploy config for either app

@@ -6,19 +6,19 @@ import { useHtmlImage } from "../hooks/useHtmlImage";
 
 interface LayerNodeProps {
   layer: Layer;
-  onSelect: () => void;
-  onChange: (patch: Partial<Layer>) => void;
+  onSelect: (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => void;
   registerRef: (node: Konva.Node | null) => void;
+  onDragStart: () => void;
+  onDragMove: (node: Konva.Node) => void;
+  onDragEnd: (node: Konva.Node) => void;
 }
 
-/** Renders one scene layer as Konva node(s) and wires up drag/transform
- * back into the design store, in mm. Selection highlighting is handled
- * by a shared <Transformer> in CanvasStage, not here. */
-export function LayerNode({ layer, onSelect, onChange, registerRef }: LayerNodeProps) {
+/** Renders one scene layer as Konva node(s). Position/transform math and
+ * history commits live in CanvasStage — this component only forwards
+ * gesture events for the node it owns. */
+export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMove, onDragEnd }: LayerNodeProps) {
   // Hooks must run unconditionally on every render of this instance.
   const image = useHtmlImage(layer.type === "image" ? layer.src : undefined);
-
-  const pxPerMm = mmToStagePx(1);
 
   const common = {
     id: layer.id,
@@ -33,24 +33,9 @@ export function LayerNode({ layer, onSelect, onChange, registerRef }: LayerNodeP
     onClick: onSelect,
     onTap: onSelect,
     ref: registerRef,
-    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
-      const node = e.target;
-      onChange({ x: node.x() / pxPerMm, y: node.y() / pxPerMm });
-    },
-    onTransformEnd: (e: Konva.KonvaEventObject<Event>) => {
-      const node = e.target as Konva.Node;
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
-      node.scaleX(1);
-      node.scaleY(1);
-      onChange({
-        x: node.x() / pxPerMm,
-        y: node.y() / pxPerMm,
-        width: (node.width() * scaleX) / pxPerMm,
-        height: (node.height() * scaleY) / pxPerMm,
-        rotationDeg: node.rotation(),
-      });
-    },
+    onDragStart,
+    onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => onDragMove(e.target),
+    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => onDragEnd(e.target),
   };
 
   if (layer.type === "frame") {
