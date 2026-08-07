@@ -1,8 +1,10 @@
 import type Konva from "konva";
 import type { RefObject } from "react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
+import { FRAME_ASSETS } from "../frameAssets";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -35,7 +37,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       id: newId(),
       name: "Frame",
       type: "frame",
-      assetId: "placeholder-frame",
+      assetId: FRAME_ASSETS[0]!.id,
       rotationDeg: 0,
       opacity: 1,
       visible: true,
@@ -101,7 +103,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const handleExport = () => {
     const stage = stageRef.current;
     if (!stage) return;
-    const dataUrl = exportStageToPngDataUrl(stage, PRINT_DPI);
+    const dataUrl = exportStageToPngDataUrl(stage, design.size, PRINT_DPI);
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = `${design.name || "card"}.png`;
@@ -109,12 +111,18 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   };
 
   return (
-    <div style={{ display: "flex", gap: 8, padding: 8, borderBottom: "1px solid #e5e7eb" }}>
-      <button onClick={addFrame}>+ Frame</button>
-      <button onClick={addText}>+ Text</button>
-      <button onClick={addShape}>+ Shape</button>
-      <label style={{ cursor: "pointer" }}>
-        + Image
+    <div className="cs-root" style={{ display: "flex", alignItems: "center", gap: 6, padding: 8, borderBottom: "1px solid var(--cs-border)" }}>
+      <button className="cs-btn" onClick={addFrame}>
+        <Frame size={16} /> Frame
+      </button>
+      <button className="cs-btn" onClick={addText}>
+        <Type size={16} /> Text
+      </button>
+      <button className="cs-btn" onClick={addShape}>
+        <Shapes size={16} /> Shape
+      </button>
+      <label className="cs-btn" style={{ cursor: "pointer" }}>
+        <ImageUp size={16} /> Image
         <input
           type="file"
           accept="image/*"
@@ -127,26 +135,38 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
         />
       </label>
 
-      <div style={{ width: 1, background: "#e5e7eb", margin: "0 4px" }} />
+      <div className="cs-divider" />
 
-      <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">
-        ↩ Undo
+      <button className="cs-icon-btn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/Cmd+Z)">
+        <Undo2 size={16} />
       </button>
-      <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl/Cmd+Shift+Z)">
-        ↪ Redo
+      <button className="cs-icon-btn" onClick={redo} disabled={!canRedo} title="Redo (Ctrl/Cmd+Shift+Z)">
+        <Redo2 size={16} />
       </button>
-      <button onClick={() => duplicateLayers(selectedLayerIds)} disabled={selectedLayerIds.length === 0} title="Duplicate (Ctrl/Cmd+D)">
-        Duplicate
+      <button
+        className="cs-icon-btn"
+        onClick={() => duplicateLayers(selectedLayerIds)}
+        disabled={selectedLayerIds.length === 0}
+        title="Duplicate (Ctrl/Cmd+D)"
+      >
+        <Copy size={16} />
       </button>
-      <button onClick={() => removeLayers(selectedLayerIds)} disabled={selectedLayerIds.length === 0} title="Delete (Del)">
-        Delete
+      <button
+        className="cs-icon-btn"
+        onClick={() => removeLayers(selectedLayerIds)}
+        disabled={selectedLayerIds.length === 0}
+        title="Delete (Del)"
+      >
+        <Trash2 size={16} />
       </button>
 
       <div style={{ flex: 1 }} />
-      <span style={{ alignSelf: "center", color: "#6b7280", fontSize: 12 }}>
+      <span style={{ alignSelf: "center", color: "var(--cs-text-muted)", fontSize: 12 }}>
         {design.size.widthMm}×{design.size.heightMm}mm
       </span>
-      <button onClick={handleExport}>Export PNG ({PRINT_DPI} DPI)</button>
+      <button className="cs-btn" onClick={handleExport} title={`Export PNG at ${PRINT_DPI} DPI`}>
+        <Download size={16} /> Export ({PRINT_DPI} DPI)
+      </button>
     </div>
   );
 }

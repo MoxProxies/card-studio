@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createEmptyDesign, STANDARD_CARD_MM, DEFAULT_BLEED_MM } from "@card-studio/scene-schema";
 import { DesignProvider } from "./store/DesignProvider";
 import { App } from "./App";
+import "./styles.css";
 
 const design = createEmptyDesign(crypto.randomUUID(), {
   ...STANDARD_CARD_MM,

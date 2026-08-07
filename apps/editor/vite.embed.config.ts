@@ -10,6 +10,14 @@ import { resolve } from "node:path";
  */
 export default defineConfig({
   plugins: [react()],
+  // Vite's standard app build replaces process.env.NODE_ENV automatically
+  // (React's CJS wrapper branches on it); library mode doesn't pick that up
+  // the same way, so left implicit this bundle throws "process is not
+  // defined" the moment it runs in a plain browser — exactly the environment
+  // it's loaded into on the host page. Must be set explicitly here.
+  define: {
+    "process.env.NODE_ENV": JSON.stringify("production"),
+  },
   build: {
     outDir: "dist/embed",
     lib: {

@@ -1,5 +1,6 @@
 import { createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { Design, Layer, mmToPx, PRINT_DPI } from "@card-studio/scene-schema";
+import { getFrameAssetPath } from "./frameAssets.js";
 
 /**
  * Rasterizes a Design at a given DPI. This is the print-quality path:
@@ -7,10 +8,10 @@ import { Design, Layer, mmToPx, PRINT_DPI } from "@card-studio/scene-schema";
  * server-side at full resolution (e.g. 800 DPI @ 63x88mm ≈ 1984x2772px)
  * instead of scaling up a screen-resolution canvas.
  *
- * Frame assets aren't wired to real storage yet (no asset library),
- * so frame layers render as a flat tint — same placeholder behaviour
- * as the editor. Swap in real asset resolution (assetId -> URL) once
- * that service exists.
+ * Frame layers resolve assetId against the built-in catalog
+ * (frameAssets.ts) and draw that artwork stretched to the layer's box,
+ * same as the editor. An unresolved id (unknown/legacy) falls back to
+ * a flat tint fill.
  */
 export async function renderDesign(design: Design, dpi: number = PRINT_DPI): Promise<Buffer> {
   const widthPx = Math.round(mmToPx(design.size.widthMm, dpi));
@@ -44,8 +45,7 @@ async function drawLayer(ctx: SKRSContext2D, layer: Layer, dpi: number): Promise
 
   switch (layer.type) {
     case "frame":
-      ctx.fillStyle = layer.tint ?? "#e5e7eb";
-      ctx.fillRect(0, 0, width, height);
+      await drawFrame(ctx, layer, width, height);
       break;
 
     case "shape":
@@ -62,6 +62,21 @@ async function drawLayer(ctx: SKRSContext2D, layer: Layer, dpi: number): Promise
   }
 
   ctx.restore();
+}
+
+async function drawFrame(ctx: SKRSContext2D, layer: Extract<Layer, { type: "frame" }>, width: number, height: number) {
+  const assetPath = getFrameAssetPath(layer.assetId);
+  if (assetPath) {
+    try {
+      const image = await loadImage(assetPath);
+      ctx.drawImage(image, 0, 0, width, height);
+      return;
+    } catch {
+      // Fall through to the tint placeholder if the asset failed to load.
+    }
+  }
+  ctx.fillStyle = layer.tint ?? "#e5e7eb";
+  ctx.fillRect(0, 0, width, height);
 }
 
 function drawShape(

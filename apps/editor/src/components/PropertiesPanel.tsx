@@ -1,12 +1,31 @@
 import type { ChangeEvent, CSSProperties } from "react";
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  Bold,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignHorizontalJustifyStart,
+  AlignHorizontalJustifyCenter,
+  AlignHorizontalJustifyEnd,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
+  Copy,
+  Trash2,
+} from "lucide-react";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
+import { FRAME_ASSETS } from "../frameAssets";
 
 const FONT_OPTIONS = ["Inter", "Arial", "Georgia", "Times New Roman", "Courier New", "Trebuchet MS"];
 
 const panelStyle: CSSProperties = {
   width: 260,
-  borderLeft: "1px solid #e5e7eb",
+  borderLeft: "1px solid var(--cs-border)",
   padding: 12,
   overflowY: "auto",
   fontSize: 13,
@@ -14,7 +33,7 @@ const panelStyle: CSSProperties = {
 const headingStyle: CSSProperties = { fontSize: 13, fontWeight: 600, margin: "0 0 10px" };
 const fieldRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 3, marginBottom: 8 };
 const twoColStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 };
-const labelStyle: CSSProperties = { color: "#6b7280", fontSize: 11 };
+const labelStyle: CSSProperties = { color: "var(--cs-text-muted)", fontSize: 11 };
 
 export function PropertiesPanel() {
   const design = useDesignStore((s) => s.design);
@@ -45,30 +64,46 @@ export function PropertiesPanel() {
 
   if (selectedLayers.length === 0) {
     return (
-      <div style={panelStyle} data-testid="properties-panel">
-        <p style={{ color: "#9ca3af", fontSize: 12 }}>Select a layer to edit its properties.</p>
+      <div className="cs-root" style={panelStyle} data-testid="properties-panel">
+        <p style={{ color: "var(--cs-text-muted)", fontSize: 12 }}>Select a layer to edit its properties.</p>
       </div>
     );
   }
 
   if (selectedLayers.length > 1) {
     return (
-      <div style={panelStyle} data-testid="properties-panel">
+      <div className="cs-root" style={panelStyle} data-testid="properties-panel">
         <h3 style={headingStyle} data-testid="multi-select-heading">{selectedLayers.length} layers selected</h3>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Align to card</span>
           <div style={{ display: "flex", gap: 4 }}>
-            <button title="Align left" onClick={() => alignTo("x", "start")}>⇤</button>
-            <button title="Center horizontally" onClick={() => alignTo("x", "center")}>↔</button>
-            <button title="Align right" onClick={() => alignTo("x", "end")}>⇥</button>
-            <button title="Align top" onClick={() => alignTo("y", "start")}>⇡</button>
-            <button title="Center vertically" onClick={() => alignTo("y", "center")}>↕</button>
-            <button title="Align bottom" onClick={() => alignTo("y", "end")}>⇣</button>
+            <button className="cs-icon-btn" title="Align left" onClick={() => alignTo("x", "start")}>
+              <AlignHorizontalJustifyStart size={15} />
+            </button>
+            <button className="cs-icon-btn" title="Center horizontally" onClick={() => alignTo("x", "center")}>
+              <AlignHorizontalJustifyCenter size={15} />
+            </button>
+            <button className="cs-icon-btn" title="Align right" onClick={() => alignTo("x", "end")}>
+              <AlignHorizontalJustifyEnd size={15} />
+            </button>
+            <button className="cs-icon-btn" title="Align top" onClick={() => alignTo("y", "start")}>
+              <AlignVerticalJustifyStart size={15} />
+            </button>
+            <button className="cs-icon-btn" title="Center vertically" onClick={() => alignTo("y", "center")}>
+              <AlignVerticalJustifyCenter size={15} />
+            </button>
+            <button className="cs-icon-btn" title="Align bottom" onClick={() => alignTo("y", "end")}>
+              <AlignVerticalJustifyEnd size={15} />
+            </button>
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          <button onClick={() => duplicateLayers(selectedLayerIds)}>Duplicate</button>
-          <button onClick={() => removeLayers(selectedLayerIds)}>Delete</button>
+          <button className="cs-btn" onClick={() => duplicateLayers(selectedLayerIds)}>
+            <Copy size={14} /> Duplicate
+          </button>
+          <button className="cs-btn" onClick={() => removeLayers(selectedLayerIds)}>
+            <Trash2 size={14} /> Delete
+          </button>
         </div>
       </div>
     );
@@ -101,34 +136,34 @@ export function PropertiesPanel() {
   });
 
   return (
-    <div style={panelStyle} data-testid="properties-panel">
+    <div className="cs-root" style={panelStyle} data-testid="properties-panel">
       <h3 style={headingStyle}>{layer.name}</h3>
 
       <div style={fieldRowStyle}>
         <span style={labelStyle}>Name</span>
-        <input {...liveText("name")} />
+        <input className="cs-input" {...liveText("name")} />
       </div>
 
       <div style={twoColStyle}>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>X (mm)</span>
-          <input {...liveNumber("x")} />
+          <input className="cs-input" {...liveNumber("x")} />
         </div>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Y (mm)</span>
-          <input {...liveNumber("y")} />
+          <input className="cs-input" {...liveNumber("y")} />
         </div>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Width (mm)</span>
-          <input {...liveNumber("width")} />
+          <input className="cs-input" {...liveNumber("width")} />
         </div>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Height (mm)</span>
-          <input {...liveNumber("height")} />
+          <input className="cs-input" {...liveNumber("height")} />
         </div>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Rotation (°)</span>
-          <input {...liveNumber("rotationDeg", 1)} />
+          <input className="cs-input" {...liveNumber("rotationDeg", 1)} />
         </div>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Opacity</span>
@@ -145,35 +180,49 @@ export function PropertiesPanel() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 12, margin: "8px 0" }}>
-        <label style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>
-          <input
-            type="checkbox"
-            checked={layer.visible}
-            onChange={(e) => commitLayerChange(layer.id, { visible: e.target.checked })}
-          />
-          Visible
-        </label>
-        <label style={{ display: "flex", gap: 4, alignItems: "center", fontSize: 12 }}>
-          <input
-            type="checkbox"
-            checked={layer.locked}
-            onChange={(e) => commitLayerChange(layer.id, { locked: e.target.checked })}
-          />
-          Locked
-        </label>
+      <div style={{ display: "flex", gap: 6, margin: "8px 0" }}>
+        <button
+          className={`cs-icon-btn${layer.visible ? " cs-active" : ""}`}
+          title={layer.visible ? "Visible (click to hide)" : "Hidden (click to show)"}
+          onClick={() => commitLayerChange(layer.id, { visible: !layer.visible })}
+        >
+          {layer.visible ? <Eye size={15} /> : <EyeOff size={15} />}
+        </button>
+        <button
+          className={`cs-icon-btn${layer.locked ? " cs-active" : ""}`}
+          title={layer.locked ? "Locked (click to unlock)" : "Unlocked (click to lock)"}
+          onClick={() => commitLayerChange(layer.id, { locked: !layer.locked })}
+        >
+          {layer.locked ? <Lock size={15} /> : <Unlock size={15} />}
+        </button>
       </div>
 
-      <hr style={{ border: "none", borderTop: "1px solid #e5e7eb", margin: "10px 0" }} />
+      <hr style={{ border: "none", borderTop: "1px solid var(--cs-border)", margin: "10px 0" }} />
 
       {layer.type === "frame" && (
         <>
           <div style={fieldRowStyle}>
-            <span style={labelStyle}>Asset id (no library yet)</span>
-            <input value={layer.assetId} disabled />
+            <span style={labelStyle}>Frame</span>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+              {FRAME_ASSETS.map((asset) => (
+                <button
+                  key={asset.id}
+                  className={`cs-swatch${layer.assetId === asset.id ? " cs-active" : ""}`}
+                  title={asset.name}
+                  onClick={() => commitLayerChange(layer.id, { assetId: asset.id })}
+                  style={{ aspectRatio: "63 / 88" }}
+                >
+                  <img
+                    src={`/frames/${asset.fileName}`}
+                    alt={asset.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                </button>
+              ))}
+            </div>
           </div>
           <div style={fieldRowStyle}>
-            <span style={labelStyle}>Tint</span>
+            <span style={labelStyle}>Tint override</span>
             <input {...liveColor("tint", layer.tint ?? "#e5e7eb")} />
           </div>
         </>
@@ -184,6 +233,7 @@ export function PropertiesPanel() {
           <div style={fieldRowStyle}>
             <span style={labelStyle}>Content</span>
             <textarea
+              className="cs-input"
               rows={3}
               value={layer.content}
               onFocus={beginLiveEdit}
@@ -193,7 +243,11 @@ export function PropertiesPanel() {
           </div>
           <div style={fieldRowStyle}>
             <span style={labelStyle}>Font</span>
-            <select value={layer.fontFamily} onChange={(e) => commitLayerChange(layer.id, { fontFamily: e.target.value })}>
+            <select
+              className="cs-input"
+              value={layer.fontFamily}
+              onChange={(e) => commitLayerChange(layer.id, { fontFamily: e.target.value })}
+            >
               {FONT_OPTIONS.map((f) => (
                 <option key={f} value={f}>
                   {f}
@@ -205,6 +259,7 @@ export function PropertiesPanel() {
             <div style={fieldRowStyle}>
               <span style={labelStyle}>Size (pt)</span>
               <input
+                className="cs-input"
                 type="number"
                 min={4}
                 value={layer.fontSizePt}
@@ -215,19 +270,20 @@ export function PropertiesPanel() {
             </div>
             <div style={fieldRowStyle}>
               <span style={labelStyle}>Weight</span>
-              <select
-                value={layer.fontWeight === "bold" ? "bold" : "normal"}
-                onChange={(e) => commitLayerChange(layer.id, { fontWeight: e.target.value === "bold" ? "bold" : "normal" })}
+              <button
+                className={`cs-icon-btn${layer.fontWeight === "bold" ? " cs-active" : ""}`}
+                title="Bold"
+                onClick={() => commitLayerChange(layer.id, { fontWeight: layer.fontWeight === "bold" ? "normal" : "bold" })}
               >
-                <option value="normal">Normal</option>
-                <option value="bold">Bold</option>
-              </select>
+                <Bold size={15} />
+              </button>
             </div>
           </div>
           <div style={twoColStyle}>
             <div style={fieldRowStyle}>
               <span style={labelStyle}>Line height</span>
               <input
+                className="cs-input"
                 type="number"
                 min={0.8}
                 step={0.1}
@@ -245,13 +301,20 @@ export function PropertiesPanel() {
           <div style={fieldRowStyle}>
             <span style={labelStyle}>Align</span>
             <div style={{ display: "flex", gap: 4 }}>
-              {(["left", "center", "right"] as const).map((align) => (
+              {(
+                [
+                  ["left", AlignLeft],
+                  ["center", AlignCenter],
+                  ["right", AlignRight],
+                ] as const
+              ).map(([align, Icon]) => (
                 <button
                   key={align}
+                  className={`cs-icon-btn${layer.align === align ? " cs-active" : ""}`}
+                  title={`Align ${align}`}
                   onClick={() => commitLayerChange(layer.id, { align })}
-                  style={{ fontWeight: layer.align === align ? 700 : 400 }}
                 >
-                  {align}
+                  <Icon size={15} />
                 </button>
               ))}
             </div>
@@ -259,6 +322,7 @@ export function PropertiesPanel() {
           <div style={fieldRowStyle}>
             <span style={labelStyle}>Overflow</span>
             <select
+              className="cs-input"
               value={layer.overflow}
               onChange={(e) => commitLayerChange(layer.id, { overflow: e.target.value as "shrink" | "clip" | "visible" })}
             >
@@ -274,6 +338,7 @@ export function PropertiesPanel() {
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Fit</span>
           <select
+            className="cs-input"
             value={layer.fit}
             onChange={(e) => commitLayerChange(layer.id, { fit: e.target.value as "cover" | "contain" | "fill" })}
           >

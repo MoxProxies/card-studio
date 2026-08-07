@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Stage, Layer as KonvaLayer, Rect, Line, Transformer } from "react-konva";
+import { Stage, Layer as KonvaLayer, Group, Rect, Line, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
-import { mmToStagePx } from "../geometry";
+import { mmToStagePx, WORKSPACE_PADDING_PX } from "../geometry";
 import { LayerNode } from "./LayerNode";
 
 const SNAP_THRESHOLD_PX = 6;
@@ -204,10 +204,12 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
       return;
     }
 
+    // rect is in absolute stage coordinates; layer bboxes are local to the
+    // card Group, offset by WORKSPACE_PADDING_PX within the stage.
     const hitIds = design.layers
       .filter((layer) => {
-        const lx = mmToStagePx(layer.x);
-        const ly = mmToStagePx(layer.y);
+        const lx = mmToStagePx(layer.x) + WORKSPACE_PADDING_PX;
+        const ly = mmToStagePx(layer.y) + WORKSPACE_PADDING_PX;
         const lw = mmToStagePx(layer.width);
         const lh = mmToStagePx(layer.height);
         return lx < rect.x + rect.width && lx + lw > rect.x && ly < rect.y + rect.height && ly + lh > rect.y;
@@ -217,58 +219,78 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
     setSelection(start.additive ? Array.from(new Set([...selectedLayerIds, ...hitIds])) : hitIds);
   };
 
+  const stageWidthPx = widthPx + WORKSPACE_PADDING_PX * 2;
+  const stageHeightPx = heightPx + WORKSPACE_PADDING_PX * 2;
+
   return (
     <Stage
       ref={stageRef}
-      width={widthPx}
-      height={heightPx}
+      width={stageWidthPx}
+      height={stageHeightPx}
       onMouseDown={handleStageMouseDown}
       onMouseMove={handleStageMouseMove}
       onMouseUp={handleStageMouseUp}
-      style={{ background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }}
     >
       <KonvaLayer>
-        {/* Decorative background — must not intercept pointer events, or every
-            click targets this Rect instead of the Stage and empty-canvas
-            click/marquee handling below never sees e.target === stage. */}
-        <Rect x={0} y={0} width={widthPx} height={heightPx} fill={design.backgroundColor} listening={false} />
+        {/* Workspace margin around the card, so oversized layers and
+            Transformer handles at/beyond the card's edge have somewhere to
+            render — see WORKSPACE_PADDING_PX. Non-listening so clicks here
+            still reach the Stage for marquee/deselect handling. */}
+        <Rect x={0} y={0} width={stageWidthPx} height={stageHeightPx} fill="#e5e7eb" listening={false} />
 
-        {design.layers.map((layer) => (
-          <LayerNode
-            key={layer.id}
-            layer={layer}
-            onSelect={(e) => {
-              if (e.evt.shiftKey) toggleSelect(layer.id);
-              else selectOnly(layer.id);
-            }}
-            registerRef={(node) => {
-              if (node) nodeRefs.set(layer.id, node);
-              else nodeRefs.delete(layer.id);
-              attachTransformer();
-            }}
-            onDragStart={handleLayerDragStart}
-            onDragMove={handleLayerDragMove}
-            onDragEnd={handleLayerDragEnd}
-          />
-        ))}
-
-        {design.size.bleedMm > 0 && (
+        <Group x={WORKSPACE_PADDING_PX} y={WORKSPACE_PADDING_PX}>
+          {/* Decorative background — must not intercept pointer events, or every
+              click targets this Rect instead of the Stage and empty-canvas
+              click/marquee handling below never sees e.target === stage. */}
           <Rect
-            x={bleedPx}
-            y={bleedPx}
-            width={widthPx - bleedPx * 2}
-            height={heightPx - bleedPx * 2}
-            stroke="#ef4444"
-            dash={[4, 4]}
+            x={0}
+            y={0}
+            width={widthPx}
+            height={heightPx}
+            fill={design.backgroundColor}
             listening={false}
+            shadowColor="black"
+            shadowBlur={16}
+            shadowOpacity={0.25}
           />
-        )}
 
-        {guides.map((g, i) => (
-          <Line key={i} points={g.points} stroke="#ec4899" strokeWidth={1} dash={[4, 4]} listening={false} />
-        ))}
+          {design.layers.map((layer) => (
+            <LayerNode
+              key={layer.id}
+              layer={layer}
+              onSelect={(e) => {
+                if (e.evt.shiftKey) toggleSelect(layer.id);
+                else selectOnly(layer.id);
+              }}
+              registerRef={(node) => {
+                if (node) nodeRefs.set(layer.id, node);
+                else nodeRefs.delete(layer.id);
+                attachTransformer();
+              }}
+              onDragStart={handleLayerDragStart}
+              onDragMove={handleLayerDragMove}
+              onDragEnd={handleLayerDragEnd}
+            />
+          ))}
 
-        <Transformer ref={transformerRef} rotateEnabled onTransformEnd={handleTransformEnd} />
+          {design.size.bleedMm > 0 && (
+            <Rect
+              x={bleedPx}
+              y={bleedPx}
+              width={widthPx - bleedPx * 2}
+              height={heightPx - bleedPx * 2}
+              stroke="#ef4444"
+              dash={[4, 4]}
+              listening={false}
+            />
+          )}
+
+          {guides.map((g, i) => (
+            <Line key={i} points={g.points} stroke="#ec4899" strokeWidth={1} dash={[4, 4]} listening={false} />
+          ))}
+
+          <Transformer ref={transformerRef} rotateEnabled onTransformEnd={handleTransformEnd} />
+        </Group>
       </KonvaLayer>
 
       {marqueeRect && (

@@ -13,6 +13,7 @@
   "dependencies": {
     "@card-studio/scene-schema": "workspace:*",
     "konva": "^9.3.16",
+    "lucide-react": "^1.30.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-konva": "^18.2.10",

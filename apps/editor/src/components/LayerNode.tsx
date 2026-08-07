@@ -3,6 +3,7 @@ import type Konva from "konva";
 import type { Layer } from "@card-studio/scene-schema";
 import { mmToStagePx } from "../geometry";
 import { useHtmlImage } from "../hooks/useHtmlImage";
+import { getFrameAssetUrl } from "../frameAssets";
 
 interface LayerNodeProps {
   layer: Layer;
@@ -19,6 +20,8 @@ interface LayerNodeProps {
 export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMove, onDragEnd }: LayerNodeProps) {
   // Hooks must run unconditionally on every render of this instance.
   const image = useHtmlImage(layer.type === "image" ? layer.src : undefined);
+  const frameAssetUrl = layer.type === "frame" ? getFrameAssetUrl(layer.assetId) : undefined;
+  const frameImage = useHtmlImage(frameAssetUrl);
 
   const common = {
     id: layer.id,
@@ -39,6 +42,10 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
   };
 
   if (layer.type === "frame") {
+    if (frameAssetUrl && frameImage) {
+      return <KonvaImage {...common} image={frameImage} />;
+    }
+    // Unresolved asset id (unknown/legacy) or still loading: flat-tint placeholder.
     return (
       <Group {...common}>
         <Rect

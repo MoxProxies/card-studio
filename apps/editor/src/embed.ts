@@ -4,6 +4,10 @@ import { Design, createEmptyDesign, STANDARD_CARD_MM, DEFAULT_BLEED_MM } from "@
 import { DesignProvider } from "./store/DesignProvider";
 import { createDesignStore, type DesignStore } from "./store/designStore";
 import { App } from "./App";
+// Imported as a raw string (not injected into document.head) because this
+// element renders into a shadow root — a global <style> tag can't cross the
+// shadow boundary, so the CSS has to be inlined inside it directly.
+import styles from "./styles.css?inline";
 
 /**
  * <card-studio-editor> — the integration surface for moxproxies-website.
@@ -31,6 +35,10 @@ export class CardStudioEditorElement extends HTMLElement {
     if (this.#root) return; // already mounted
 
     const shadow = this.shadowRoot ?? this.attachShadow({ mode: "open" });
+    const styleEl = document.createElement("style");
+    styleEl.textContent = styles;
+    shadow.appendChild(styleEl);
+
     const container = document.createElement("div");
     container.style.width = "100%";
     container.style.height = this.getAttribute("height") ?? "600px";

@@ -10,22 +10,34 @@ and "injected" into that site rather than merged into its codebase.
 ## Status
 
 Early scaffold. The pieces below are wired together and verified working
-end-to-end (typecheck, build, a real render smoke test, and browser-driven
-UX checks), but the editor only has placeholder frame art and no
-persistence/auth yet — see [Not built yet](#not-built-yet).
+end-to-end (typecheck, build, real render smoke tests, and browser-driven
+UX checks — including the embedded shadow-DOM path, not just the
+standalone dev server), but there's still no persistence/auth — see
+[Not built yet](#not-built-yet).
 
 The editor (`apps/editor`) currently supports:
 - Add frame/text/image/shape layers; drag, resize, rotate via a Konva
-  Transformer.
+  Transformer. The canvas renders a workspace margin around the card
+  (`WORKSPACE_PADDING_PX`) so a layer larger than the card — or a
+  Transformer handle sitting right at the card's edge — has somewhere to
+  draw; without it, that content and those handles are simply clipped by
+  the canvas's own pixel bounds and become unreachable.
+- A built-in frame catalog (6 original, generic trading-card frame
+  templates — see [Frame catalog](#frame-catalog) below) with a picker
+  grid in the properties panel. Not a user-upload library yet.
 - Multi-select: shift-click, or marquee (rubber-band) select on empty
   canvas.
 - Alignment/snap guides while dragging a single layer (snaps to other
   layers' edges/centers and the card's edges/center).
 - Undo/redo (`Ctrl/Cmd+Z` / `Ctrl/Cmd+Shift+Z`), duplicate (`Ctrl/Cmd+D`),
   delete (`Del`/`Backspace`), arrow-key nudge (`Shift` for a larger step).
-- A properties panel: position/size/rotation/opacity, per-type fields
-  (font/size/weight/color/align for text, tint for frames, fill/stroke
-  for shapes, fit for images), and "align to card" for multi-select.
+- A properties panel: position/size/rotation/opacity, icon toggles for
+  visible/locked, per-type fields (font/size/weight/color/align for text,
+  frame picker + tint override for frames, fill/stroke for shapes, fit
+  for images), and "align to card" for multi-select.
+- Icons throughout (`lucide-react`) with a small shared stylesheet
+  (`src/styles.css`) for consistent buttons/inputs — see the shadow-DOM
+  note below for why it's `.cs-root` and not `:root`.
 
 ## Layout
 
@@ -59,12 +71,31 @@ crisp at 800 DPI (1984×2772px) for actual print fulfillment, which is
 what this needs to feed. See `packages/scene-schema/src/schema.ts` and
 `services/render/src/renderDesign.ts`.
 
-**Frame/asset library doesn't exist yet.** `FrameLayer` already has the
-shape it needs (`assetId` + optional `tint`), but there's no asset
-storage or catalog behind it — both the editor and the render service
-currently draw frame layers as a flat tinted rect as a placeholder.
-Wiring `assetId` to real frame artwork (upload, catalog, versioning) is
-the next real chunk of work, not a redesign.
+**Frame catalog.** `FrameLayer.assetId` resolves against a small built-in
+catalog of 6 original frame templates (`classic-{white,blue,black,red,
+green,gold}`) — a border, name bar, type bar, text box, and PT box drawn
+around a deliberately transparent "art window", so an Image layer placed
+underneath a Frame layer shows through as the card's art. These are
+generic, original artwork (not a reproduction of any specific card
+game's copyrighted frame design) generated with `@napi-rs/canvas` via
+`services/render/scripts/generate-frame-assets.mjs` — rerun it if you
+want to tweak the designs. An unresolved `assetId` (unknown or a legacy
+design) falls back to the old flat-tint placeholder, so nothing breaks
+if the catalog changes.
+
+The catalog *data* (id/name/fileName) and its backing PNGs are
+duplicated between `apps/editor/src/frameAssets.ts` (+
+`apps/editor/public/frames/`, served to the browser) and
+`services/render/src/frameAssets.ts` (+ `services/render/assets/frames/`,
+loaded by `@napi-rs/canvas`'s `loadImage` from disk). This is a known
+simplification for a two-consumer scaffold — worth consolidating into a
+real asset store (with upload) once there's a persistence layer, rather
+than a shared package that still just ships static files twice.
+
+The frame-picker thumbnails and the editor's own frame rendering both
+assume `/frames/...` is served from the deploying host's origin root; if
+either build ever ships under a subpath, that'll need a proper base-path
+fix (Vite's `base` config), not just changing the string.
 
 **Embedding into moxproxies-website: a custom element, not an iframe.**
 `apps/editor` has two Vite build targets:
@@ -91,6 +122,26 @@ the next real chunk of work, not a redesign.
   the bundle's URL); that's an acceptable trade here since both sites
   are ours.
 
+  Two pitfalls specific to this shadow-DOM/library-mode build, both
+  found by actually loading the built bundle in a plain host page rather
+  than trusting the standalone dev server:
+  - CSS custom properties are defined on `.cs-root`, not `:root` —
+    `:root` only ever matches the top-level *document's* root element,
+    never a shadow tree's boundary, so a stylesheet injected into the
+    shadow root (see `embed.ts`) would silently fail to theme anything
+    if it used `:root`. `styles.css` is imported with Vite's `?inline`
+    query and manually appended as a `<style>` inside the shadow root
+    for exactly this reason — a normal `import "./styles.css"` injects
+    into `document.head`, which can't cross the shadow boundary either.
+  - `vite.embed.config.ts` sets `define: { "process.env.NODE_ENV":
+    '"production"' }` explicitly. Vite's standard app build replaces
+    that automatically (React's CJS wrapper branches on it); library
+    mode doesn't pick it up the same way, so without it the bundle
+    throws `process is not defined` the instant it runs in a browser —
+    which is, unhelpfully, exactly the environment it's loaded into.
+    Fixing it also let Rollup dead-code-eliminate React's whole dev-mode
+    branch, dropping the bundle from ~1.6MB to ~750KB.
+
 ## How this is meant to connect to moxproxies-website
 
 Not implemented yet, but the shape of it:
@@ -113,7 +164,8 @@ Not implemented yet, but the shape of it:
 
 ## Not built yet
 
-- Frame/template asset library (upload, catalog, `assetId` resolution)
+- User-uploaded/managed frame assets (today's catalog is a fixed,
+  built-in set — see [Frame catalog](#frame-catalog))
 - Persistence (saving/loading designs — currently all in-memory)
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare

@@ -1,0 +1,112 @@
+/* .cs-root, not :root — this stylesheet gets injected into a shadow root
+ * when embedded (see embed.ts), and :root only ever matches the top-level
+ * document's <html>, never a shadow tree's boundary. A class selector works
+ * identically in both the standalone document and inside a shadow root. */
+.cs-root {
+  --cs-border: #e5e7eb;
+  --cs-border-strong: #d1d5db;
+  --cs-text: #111827;
+  --cs-text-muted: #6b7280;
+  --cs-accent: #6366f1;
+  --cs-accent-soft: #eef2ff;
+  --cs-surface: #ffffff;
+  --cs-danger: #ef4444;
+}
+
+.cs-root, .cs-root * {
+  box-sizing: border-box;
+}
+
+.cs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 8px;
+  background: var(--cs-surface);
+  color: var(--cs-text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.cs-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+.cs-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cs-btn.cs-active {
+  background: var(--cs-accent-soft);
+  border-color: var(--cs-accent);
+  color: var(--cs-accent);
+}
+
+.cs-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.cs-icon-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: var(--cs-text);
+}
+.cs-icon-btn.cs-active {
+  background: var(--cs-accent-soft);
+  color: var(--cs-accent);
+}
+.cs-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cs-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--cs-border);
+  margin: 0 2px;
+}
+
+.cs-input {
+  border: 1px solid var(--cs-border-strong);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 13px;
+  color: var(--cs-text);
+  background: var(--cs-surface);
+}
+.cs-input:focus {
+  outline: 2px solid var(--cs-accent-soft);
+  border-color: var(--cs-accent);
+}
+.cs-input:disabled {
+  color: var(--cs-text-muted);
+  background: #f9fafb;
+}
+
+.cs-swatch {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  background: #f3f4f6;
+  transition: border-color 120ms ease;
+}
+.cs-swatch:hover {
+  border-color: var(--cs-border-strong);
+}
+.cs-swatch.cs-active {
+  border-color: var(--cs-accent);
+}
