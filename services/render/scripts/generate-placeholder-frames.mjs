@@ -7,11 +7,11 @@
 // (fully transparent), so an Image layer placed underneath a Frame layer
 // shows through as the card's art.
 //
-// Run with: node scripts/generate-frame-assets.mjs
-// Writes identical copies to apps/editor/public/frames (served to the
-// browser) and services/render/assets/frames (loaded by the render
-// service) — see README for why the frame catalog data is duplicated
-// rather than shared.
+// Run with: node services/render/scripts/generate-placeholder-frames.mjs
+// Writes into frame-library/classic/ — the canonical source directory for
+// frame art (see README's "Adding frames" section). Run
+// `node scripts/sync-frame-library.mjs` afterwards to publish it to both
+// apps/editor and services/render.
 
 import { createCanvas } from "@napi-rs/canvas";
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -113,19 +113,16 @@ function drawFrame({ primary, accent }) {
 }
 
 async function main() {
-  const targets = [
-    path.resolve(__dirname, "../../../apps/editor/public/frames"),
-    path.resolve(__dirname, "../assets/frames"),
-  ];
-  for (const dir of targets) mkdirSync(dir, { recursive: true });
+  const outDir = path.resolve(__dirname, "../../../frame-library/classic");
+  mkdirSync(outDir, { recursive: true });
 
   for (const theme of THEMES) {
     const png = await drawFrame(theme);
-    for (const dir of targets) {
-      writeFileSync(path.join(dir, theme.fileName), png);
-    }
+    writeFileSync(path.join(outDir, theme.fileName), png);
     console.log("generated", theme.fileName);
   }
+
+  console.log("\nRun `node scripts/sync-frame-library.mjs` to publish these.");
 }
 
 main();

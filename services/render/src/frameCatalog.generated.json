@@ -1,0 +1,44 @@
+[
+  {
+    "id": "classic/classic-black",
+    "name": "Classic Black",
+    "category": "classic",
+    "categoryLabel": "Classic",
+    "fileName": "classic-black.png"
+  },
+  {
+    "id": "classic/classic-blue",
+    "name": "Classic Blue",
+    "category": "classic",
+    "categoryLabel": "Classic",
+    "fileName": "classic-blue.png"
+  },
+  {
+    "id": "classic/classic-gold",
+    "name": "Classic Gold",
+    "category": "classic",
+    "categoryLabel": "Classic",
+    "fileName": "classic-gold.png"
+  },
+  {
+    "id": "classic/classic-green",
+    "name": "Classic Green",
+    "category": "classic",
+    "categoryLabel": "Classic",
+    "fileName": "classic-green.png"
+  },
+  {
+    "id": "classic/classic-red",
+    "name": "Classic Red",
+    "category": "classic",
+    "categoryLabel": "Classic",
+    "fileName": "classic-red.png"
+  },
+  {
+    "id": "classic/classic-white",
+    "name": "Classic White",
+    "category": "classic",
+    "categoryLabel": "Classic",
+    "fileName": "classic-white.png"
+  }
+]

@@ -1,4 +1,4 @@
-import type { ChangeEvent, CSSProperties } from "react";
+import { useState, type ChangeEvent, type CSSProperties } from "react";
 import {
   Eye,
   EyeOff,
@@ -16,10 +16,12 @@ import {
   AlignVerticalJustifyEnd,
   Copy,
   Trash2,
+  ImageOff,
 } from "lucide-react";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
-import { FRAME_ASSETS } from "../frameAssets";
+import { getFrameAsset } from "../frameAssets";
+import { FrameLibraryModal } from "./FrameLibraryModal";
 
 const FONT_OPTIONS = ["Inter", "Arial", "Georgia", "Times New Roman", "Courier New", "Trebuchet MS"];
 
@@ -45,6 +47,7 @@ export function PropertiesPanel() {
   const commitLiveEdit = useDesignStore((s) => s.commitLiveEdit);
   const removeLayers = useDesignStore((s) => s.removeLayers);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
+  const [showFrameLibrary, setShowFrameLibrary] = useState(false);
 
   const selectedLayers = design.layers.filter((l) => selectedLayerIds.includes(l.id));
 
@@ -203,22 +206,31 @@ export function PropertiesPanel() {
         <>
           <div style={fieldRowStyle}>
             <span style={labelStyle}>Frame</span>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-              {FRAME_ASSETS.map((asset) => (
-                <button
-                  key={asset.id}
-                  className={`cs-swatch${layer.assetId === asset.id ? " cs-active" : ""}`}
-                  title={asset.name}
-                  onClick={() => commitLayerChange(layer.id, { assetId: asset.id })}
-                  style={{ aspectRatio: "63 / 88" }}
-                >
-                  <img
-                    src={`/frames/${asset.fileName}`}
-                    alt={asset.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 44, aspectRatio: "63 / 88", borderRadius: 6, overflow: "hidden", background: "#f3f4f6", flex: "none" }}>
+                {(() => {
+                  const asset = getFrameAsset(layer.assetId);
+                  return asset ? (
+                    <img
+                      src={`/frames/${asset.category}/${asset.fileName}`}
+                      alt={asset.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <ImageOff size={16} color="var(--cs-text-muted)" />
+                    </div>
+                  );
+                })()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {getFrameAsset(layer.assetId)?.name ?? layer.assetId}
+                </div>
+                <button className="cs-btn" style={{ marginTop: 4, fontSize: 12, padding: "4px 8px" }} onClick={() => setShowFrameLibrary(true)}>
+                  Change frame…
                 </button>
-              ))}
+              </div>
             </div>
           </div>
           <div style={fieldRowStyle}>
@@ -360,6 +372,16 @@ export function PropertiesPanel() {
             <input {...liveColor("stroke", layer.stroke ?? "#000000")} />
           </div>
         </div>
+      )}
+
+      {showFrameLibrary && layer.type === "frame" && (
+        <FrameLibraryModal
+          onSelect={(assetId) => {
+            commitLayerChange(layer.id, { assetId });
+            setShowFrameLibrary(false);
+          }}
+          onClose={() => setShowFrameLibrary(false)}
+        />
       )}
     </div>
   );

@@ -22,9 +22,18 @@ The editor (`apps/editor`) currently supports:
   Transformer handle sitting right at the card's edge — has somewhere to
   draw; without it, that content and those handles are simply clipped by
   the canvas's own pixel bounds and become unreachable.
-- A built-in frame catalog (6 original, generic trading-card frame
-  templates — see [Frame catalog](#frame-catalog) below) with a picker
-  grid in the properties panel. Not a user-upload library yet.
+- Imported images default to their own aspect ratio (contained within
+  the cut area, centered) instead of a fixed box — a fixed box ignoring
+  the source image's shape is what previously made every import come in
+  squished. See `getImageNaturalSize` in `Toolbar.tsx`.
+- A frame library (currently 6 original, generic trading-card frame
+  templates, organized into folders — see [Adding frames](#adding-frames)
+  below) with a searchable/filterable browser: a folder dropdown and a
+  text search apply concurrently. Opened from the toolbar's "Frame"
+  button (adds a new frame layer, sized to the cut/trim dimensions —
+  centered the same way the cut-line guide is) or from a frame layer's
+  "Change frame…" button in the properties panel (swaps its asset in
+  place). Not an in-app upload button yet — see below.
 - Multi-select: shift-click, or marquee (rubber-band) select on empty
   canvas.
 - Alignment/snap guides while dragging a single layer (snaps to other
@@ -57,6 +66,35 @@ pnpm build          # builds scene-schema, then editor (app + embed), then rende
 pnpm dev:editor      # http://localhost:5173 — standalone editor
 pnpm dev:render      # http://localhost:3001 — render service
 ```
+
+## Adding frames
+
+1. Drop a PNG (transparent where art should show through — see below) into
+   `frame-library/<category>/`, e.g. `frame-library/borderless/my-frame.png`.
+   A new category name is just a new folder; it shows up in the picker's
+   folder dropdown automatically, no code change.
+2. Run `pnpm sync-frames` from the repo root. This copies the image into
+   both `apps/editor/public/frames/` and `services/render/assets/frames/`,
+   and regenerates both `frameCatalog.generated.json` files.
+3. Commit everything sync touched (`frame-library/`, the two
+   `public`/`assets` copies, the two generated JSON files).
+
+The frame's `id` is `<category>/<filename-without-extension>`; its
+display name and folder label are the filename/foldername with
+hyphens/underscores turned into spaces and title-cased — rename the file
+if you want a different display name, there's no separate metadata file
+to edit.
+
+**Draw new frame art with a transparent art window.** The area where a
+card's art should show through (typically most of the card, between the
+name bar and the type/text boxes) needs to be left unpainted — actual
+alpha transparency, not white — so an Image layer placed underneath a
+Frame layer shows through it. Painting that region any opaque color
+(including white) hides the art entirely. See
+`services/render/scripts/generate-placeholder-frames.mjs` for a worked
+example of drawing a frame this way with `@napi-rs/canvas`; it's also
+the script to rerun (writing into `frame-library/classic/`, then sync)
+if you want to tweak the 6 built-in placeholder designs.
 
 ## Design decisions
 
@@ -97,26 +135,48 @@ to feed. See `packages/scene-schema/src/schema.ts` and
   content cut off or a border of unprinted white — it's worth reading
   `units.ts`'s comment before changing any of these numbers.
 
-**Frame catalog.** `FrameLayer.assetId` resolves against a small built-in
-catalog of 6 original frame templates (`classic-{white,blue,black,red,
-green,gold}`) — a border, name bar, type bar, text box, and PT box drawn
-around a deliberately transparent "art window", so an Image layer placed
-underneath a Frame layer shows through as the card's art. These are
-generic, original artwork (not a reproduction of any specific card
-game's copyrighted frame design) generated with `@napi-rs/canvas` via
-`services/render/scripts/generate-frame-assets.mjs` — rerun it if you
-want to tweak the designs. An unresolved `assetId` (unknown or a legacy
-design) falls back to the old flat-tint placeholder, so nothing breaks
-if the catalog changes.
+**Frame catalog is directory-driven, not hand-edited.** `frame-library/`
+at the repo root is the canonical source: one subfolder per category,
+one image per frame —
 
-The catalog *data* (id/name/fileName) and its backing PNGs are
-duplicated between `apps/editor/src/frameAssets.ts` (+
-`apps/editor/public/frames/`, served to the browser) and
-`services/render/src/frameAssets.ts` (+ `services/render/assets/frames/`,
-loaded by `@napi-rs/canvas`'s `loadImage` from disk). This is a known
-simplification for a two-consumer scaffold — worth consolidating into a
-real asset store (with upload) once there's a persistence layer, rather
-than a shared package that still just ships static files twice.
+```
+frame-library/
+  classic/
+    classic-white.png
+    classic-blue.png
+    ...
+```
+
+`scripts/sync-frame-library.mjs` scans it and publishes the result to
+both consumers: it copies every image into `apps/editor/public/frames/`
+(served to the browser) and `services/render/assets/frames/` (loaded by
+`@napi-rs/canvas`'s `loadImage` from disk), and writes a generated
+catalog — `id` (`"<category>/<slug>"`), display `name`/`categoryLabel`
+(humanized from the folder/file names), `category`, `fileName` — to
+`apps/editor/src/frameCatalog.generated.json` and
+`services/render/src/frameCatalog.generated.json`. Both `frameAssets.ts`
+modules just import that JSON; nothing about adding a frame requires
+touching TypeScript. `FrameLibraryModal.tsx` (the search/filter browser)
+and `renderDesign.ts` both resolve `assetId` against it, falling back to
+a flat-tint placeholder for an unresolved id (unknown, or a legacy
+design predating this asset) — so a catalog change never breaks an
+existing design.
+
+This is still two copies of the same files (one per consumer's runtime
+needs — a browser fetches by URL, Node reads from disk) plus a generated
+JSON catalog per copy — a known simplification for a two-consumer
+scaffold, worth consolidating into a real asset store once there's a
+persistence layer, rather than a shared package that still just ships
+static files twice. `frame-library/` and the generated JSON/images are
+all committed, so nothing needs to run at deploy time — only when you
+actually add a frame.
+
+The 6 built-in frames — a border, name bar, type bar, text box, and PT
+box around a deliberately transparent "art window" (so an Image layer
+placed underneath a Frame layer shows through as the card's art) — are
+original, generic artwork (not a reproduction of any specific card
+game's copyrighted frame design), generated with `@napi-rs/canvas` via
+`services/render/scripts/generate-placeholder-frames.mjs`.
 
 The frame-picker thumbnails and the editor's own frame rendering both
 assume `/frames/...` is served from the deploying host's origin root; if
@@ -190,8 +250,10 @@ Not implemented yet, but the shape of it:
 
 ## Not built yet
 
-- User-uploaded/managed frame assets (today's catalog is a fixed,
-  built-in set — see [Frame catalog](#frame-catalog))
+- In-app frame upload (adding a frame is a file-drop + `pnpm sync-frames`
+  + commit workflow today — see [Adding frames](#adding-frames) — not a
+  button in the UI; there's also no way yet for a running deployment to
+  pick up a new frame without a rebuild/redeploy)
 - Persistence (saving/loading designs — currently all in-memory)
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare

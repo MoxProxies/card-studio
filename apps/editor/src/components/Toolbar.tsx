@@ -1,16 +1,24 @@
+import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
-import { FRAME_ASSETS } from "../frameAssets";
+import { FrameLibraryModal } from "./FrameLibraryModal";
 
 function newId(): string {
   return crypto.randomUUID();
 }
 
 const fmt = (mm: number) => Number(mm.toFixed(2)).toString();
+
+async function getImageNaturalSize(file: File): Promise<{ width: number; height: number }> {
+  const bitmap = await createImageBitmap(file);
+  const size = { width: bitmap.width, height: bitmap.height };
+  bitmap.close();
+  return size;
+}
 
 export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
@@ -24,6 +32,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const canRedo = useDesignStore((s) => s.future.length > 0);
   const showSafeArea = useDesignStore((s) => s.showSafeArea);
   const toggleSafeArea = useDesignStore((s) => s.toggleSafeArea);
+  const [showFrameLibrary, setShowFrameLibrary] = useState(false);
 
   const centerBox = () => {
     const w = design.size.widthMm * 0.6;
@@ -36,20 +45,23 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     };
   };
 
-  const addFrame = () =>
+  const addFrame = (assetId: string) =>
     addLayer({
       id: newId(),
       name: "Frame",
       type: "frame",
-      assetId: FRAME_ASSETS[0]!.id,
+      assetId,
       rotationDeg: 0,
       opacity: 1,
       visible: true,
       locked: false,
-      x: 0,
-      y: 0,
-      width: design.size.widthMm,
-      height: design.size.heightMm,
+      // New frames size to the cut/trim dimensions — the actual card —
+      // not the full-bleed canvas, centered the same way the cut-line
+      // guide is.
+      x: (design.size.widthMm - design.size.cutWidthMm) / 2,
+      y: (design.size.heightMm - design.size.cutHeightMm) / 2,
+      width: design.size.cutWidthMm,
+      height: design.size.cutHeightMm,
     });
 
   const addText = () =>
@@ -72,8 +84,19 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       ...centerBox(),
     });
 
-  const addImage = (file: File) => {
+  const addImage = async (file: File) => {
     const src = URL.createObjectURL(file);
+    const { width: naturalWidth, height: naturalHeight } = await getImageNaturalSize(file);
+    const imageAspect = naturalWidth / naturalHeight;
+
+    // Default to the image's own aspect ratio, contained within the cut
+    // area (centered) rather than a fixed box — a fixed box ignoring the
+    // image's shape is what caused new images to render squished.
+    const cutW = design.size.cutWidthMm;
+    const cutH = design.size.cutHeightMm;
+    const width = imageAspect > cutW / cutH ? cutW : cutH * imageAspect;
+    const height = imageAspect > cutW / cutH ? cutW / imageAspect : cutH;
+
     addLayer({
       id: newId(),
       name: file.name,
@@ -84,7 +107,10 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
-      ...centerBox(),
+      x: (design.size.widthMm - width) / 2,
+      y: (design.size.heightMm - height) / 2,
+      width,
+      height,
     });
   };
 
@@ -116,7 +142,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
 
   return (
     <div className="cs-root" style={{ display: "flex", alignItems: "center", gap: 6, padding: 8, borderBottom: "1px solid var(--cs-border)" }}>
-      <button className="cs-btn" onClick={addFrame}>
+      <button className="cs-btn" onClick={() => setShowFrameLibrary(true)}>
         <Frame size={16} /> Frame
       </button>
       <button className="cs-btn" onClick={addText}>
@@ -133,7 +159,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           style={{ display: "none" }}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) addImage(file);
+            if (file) void addImage(file);
             e.target.value = "";
           }}
         />
@@ -188,6 +214,16 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       <button className="cs-btn" onClick={handleExport} title={`Export PNG at ${PRINT_DPI} DPI`}>
         <Download size={16} /> Export ({PRINT_DPI} DPI)
       </button>
+
+      {showFrameLibrary && (
+        <FrameLibraryModal
+          onSelect={(assetId) => {
+            addFrame(assetId);
+            setShowFrameLibrary(false);
+          }}
+          onClose={() => setShowFrameLibrary(false)}
+        />
+      )}
     </div>
   );
 }
