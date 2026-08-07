@@ -1,0 +1,24 @@
+{
+  "name": "@card-studio/render",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "predev": "pnpm --filter @card-studio/scene-schema build",
+    "dev": "tsx watch src/server.ts",
+    "prebuild": "pnpm --filter @card-studio/scene-schema build",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@card-studio/scene-schema": "workspace:*",
+    "@napi-rs/canvas": "^0.1.53",
+    "fastify": "^4.28.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}
