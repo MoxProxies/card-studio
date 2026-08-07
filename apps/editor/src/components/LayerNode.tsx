@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Group, Image as KonvaImage, Rect, Ellipse, Circle, Text } from "react-konva";
 import type Konva from "konva";
 import { computeObjectFit, shrinkTextToFit, type Layer } from "@card-studio/scene-schema";
@@ -5,6 +6,7 @@ import { EDITOR_DPI, mmToStagePx } from "../geometry";
 import { useHtmlImage } from "../hooks/useHtmlImage";
 import { useHtmlImages } from "../hooks/useHtmlImages";
 import { useFontsReady } from "../hooks/useFontsReady";
+import { useAlphaHitCache } from "../hooks/useAlphaHitCache";
 import { getFrameAssetUrl } from "../frameAssets";
 import { getRarityAssetUrl } from "../rarityAssets";
 import { getSymbolAssetUrl, isGenericManaToken } from "../symbolAssets";
@@ -41,6 +43,29 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
   const image = useHtmlImage(layer.type === "image" ? (rarityAssetUrl ?? layer.src) : undefined);
   const frameAssetUrl = layer.type === "frame" ? getFrameAssetUrl(layer.assetId) : undefined;
   const frameImage = useHtmlImage(frameAssetUrl);
+
+  // Clicking a transparent part of a frame (its art window, most notably)
+  // or an image layer shouldn't select that layer — it should fall through
+  // to whatever's underneath, the same as if the transparent layer weren't
+  // there. Konva's default hit region for an Image is its whole rectangle
+  // regardless of alpha, so both need an explicit alpha-aware hit cache;
+  // see useAlphaHitCache's doc comment. drawHitFromCache is a Shape-only
+  // method (Group/Container doesn't have it, since it draws nothing of its
+  // own) — for the image layer, that means caching the inner <KonvaImage>
+  // shape itself, not the wrapping Group the drag/select/transform handlers
+  // live on; that's fine, since a hit on a listening descendant still
+  // bubbles up to fire the Group's onClick like any other Konva event.
+  // Re-run whenever the loaded image or the layer's own box changes — the
+  // cache is a rasterized snapshot, not live.
+  const frameNodeRef = useRef<Konva.Image | null>(null);
+  useAlphaHitCache(frameNodeRef, [frameImage, mmToStagePx(layer.width), mmToStagePx(layer.height)]);
+  const imageShapeRef = useRef<Konva.Image | null>(null);
+  useAlphaHitCache(imageShapeRef, [
+    image,
+    mmToStagePx(layer.width),
+    mmToStagePx(layer.height),
+    layer.type === "image" ? layer.fit : undefined,
+  ]);
 
   const common = {
     id: layer.id,
@@ -109,7 +134,16 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
 
   if (layer.type === "frame") {
     if (frameAssetUrl && frameImage) {
-      return <KonvaImage {...common} image={frameImage} />;
+      return (
+        <KonvaImage
+          {...common}
+          image={frameImage}
+          ref={(node) => {
+            frameNodeRef.current = node;
+            registerRef(node);
+          }}
+        />
+      );
     }
     // Unresolved asset id (unknown/legacy) or still loading: flat-tint placeholder.
     return (
@@ -222,6 +256,7 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     return (
       <Group
         {...common}
+        ref={registerRef}
         clipFunc={
           fit.clip
             ? (ctx) => {
@@ -231,7 +266,16 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
         }
       >
         {image && (
-          <KonvaImage image={image} x={fit.offsetX} y={fit.offsetY} width={fit.drawWidth} height={fit.drawHeight} listening={false} />
+          <KonvaImage
+            image={image}
+            x={fit.offsetX}
+            y={fit.offsetY}
+            width={fit.drawWidth}
+            height={fit.drawHeight}
+            ref={(node) => {
+              imageShapeRef.current = node;
+            }}
+          />
         )}
       </Group>
     );

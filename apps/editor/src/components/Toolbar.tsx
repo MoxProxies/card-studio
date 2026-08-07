@@ -83,13 +83,15 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
-      // New frames size to the cut/trim dimensions — the actual card —
-      // not the full-bleed canvas, centered the same way the cut-line
-      // guide is.
-      x: (design.size.widthMm - design.size.cutWidthMm) / 2,
-      y: (design.size.heightMm - design.size.cutHeightMm) / 2,
-      width: design.size.cutWidthMm,
-      height: design.size.cutHeightMm,
+      // New frames size to the full-bleed canvas, not just the cut/trim
+      // dimensions — frame art needs to extend past the trim line, or the
+      // printed card shows a background-color gap around the edge once
+      // cut. See generate-placeholder-frames.mjs for how the built-in
+      // frame art itself was authored to match.
+      x: 0,
+      y: 0,
+      width: design.size.widthMm,
+      height: design.size.heightMm,
     });
 
   const addText = () =>
@@ -206,13 +208,16 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     const { width: naturalWidth, height: naturalHeight } = await getImageNaturalSize(file);
     const imageAspect = naturalWidth / naturalHeight;
 
-    // Default to the image's own aspect ratio, contained within the cut
-    // area (centered) rather than a fixed box — a fixed box ignoring the
-    // image's shape is what caused new images to render squished.
-    const cutW = design.size.cutWidthMm;
-    const cutH = design.size.cutHeightMm;
-    const width = imageAspect > cutW / cutH ? cutW : cutH * imageAspect;
-    const height = imageAspect > cutW / cutH ? cutW / imageAspect : cutH;
+    // Default to the image's own aspect ratio, contained within the
+    // full-bleed canvas (centered) rather than a fixed box — a fixed box
+    // ignoring the image's shape is what caused new images to render
+    // squished, and containing within just the cut area (rather than
+    // bleed) is what left a background-color gap around art meant to
+    // extend to the card's true edge.
+    const canvasW = design.size.widthMm;
+    const canvasH = design.size.heightMm;
+    const width = imageAspect > canvasW / canvasH ? canvasW : canvasH * imageAspect;
+    const height = imageAspect > canvasW / canvasH ? canvasW / imageAspect : canvasH;
 
     addLayer({
       id: newId(),
@@ -267,10 +272,12 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       try {
         const { width: naturalWidth, height: naturalHeight } = await getRemoteImageSize(fields.artCropUrl);
         const imageAspect = naturalWidth / naturalHeight;
-        const cutW = design.size.cutWidthMm;
-        const cutH = design.size.cutHeightMm;
-        const width = imageAspect > cutW / cutH ? cutW : cutH * imageAspect;
-        const height = imageAspect > cutW / cutH ? cutW / imageAspect : cutH;
+        // Contained within the full-bleed canvas, not just cut — same
+        // reasoning as addImage's default sizing.
+        const canvasW = design.size.widthMm;
+        const canvasH = design.size.heightMm;
+        const width = imageAspect > canvasW / canvasH ? canvasW : canvasH * imageAspect;
+        const height = imageAspect > canvasW / canvasH ? canvasW / imageAspect : canvasH;
         artLayer = {
           id: newId(),
           name: `${fields.name} (art)`,

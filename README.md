@@ -26,17 +26,18 @@ The editor (`apps/editor`) currently supports:
   [Design decisions](#design-decisions) for why the Stage itself had to
   become a viewport rather than just adding scale to it.
 - Imported images default to their own aspect ratio (contained within
-  the cut area, centered) instead of a fixed box — a fixed box ignoring
-  the source image's shape is what previously made every import come in
-  squished. See `getImageNaturalSize` in `Toolbar.tsx`.
+  the full-bleed canvas, centered) instead of a fixed box — a fixed box
+  ignoring the source image's shape is what previously made every import
+  come in squished. See `getImageNaturalSize` in `Toolbar.tsx`.
 - A frame library (currently 6 original, generic trading-card frame
   templates, organized into folders — see [Adding frames](#adding-frames)
   below) with a searchable/filterable browser: a folder dropdown and a
   text search apply concurrently. Opened from the toolbar's "Frame"
-  button (adds a new frame layer, sized to the cut/trim dimensions —
-  centered the same way the cut-line guide is) or from a frame layer's
-  "Change frame…" button in the properties panel (swaps its asset in
-  place). Not an in-app upload button yet — see below.
+  button (adds a new frame layer sized to the full-bleed canvas, so the
+  frame art reaches the true edge — see [Design
+  decisions](#design-decisions)) or from a frame layer's "Change
+  frame…" button in the properties panel (swaps its asset in place). Not
+  an in-app upload button yet — see below.
 - Multi-select: shift-click, or marquee (rubber-band) select on empty
   canvas.
 - Alignment/snap guides while dragging a single layer (snaps to other
@@ -127,6 +128,18 @@ Frame layer shows through it. Painting that region any opaque color
 example of drawing a frame this way with `@napi-rs/canvas`; it's also
 the script to rerun (writing into `frame-library/classic/`, then sync)
 if you want to tweak the 6 built-in placeholder designs.
+
+**New frame layers are sized to the full-bleed canvas, so frame art
+needs to reach all four edges of its own image, not just the cut/trim
+area.** Otherwise the bleed margin (the ~3mm strip that gets trimmed
+away) shows the background color instead of a continuation of the
+frame's border once printed and cut — see [Design
+decisions](#design-decisions) for the full reasoning, and
+`generate-placeholder-frames.mjs`'s `MARGIN`/`clearRect` for a worked
+example of filling the whole canvas for bleed coverage while still
+punching the art window back out to transparent afterward (a plain
+"leave it unpainted" approach only works if nothing else fills over that
+region first).
 
 ## Adding fonts
 
@@ -497,6 +510,61 @@ API; worth a real end-to-end smoke test once this runs somewhere with
 normal internet access.
 
 ## Design decisions
+
+**Clicking a transparent part of a layer selects whatever's underneath it,
+not that layer.** Konva's default hit region for an `Image` shape is its
+whole rectangle regardless of pixel alpha, so a frame's art window (real
+transparency, by design — see [Adding frames](#adding-frames)) used to
+be just as clickable as its painted border, making it easy to grab the
+frame when you meant to grab the art or text underneath. Fixed with a
+small hook, `useAlphaHitCache` (`apps/editor/src/hooks/`), that calls
+Konva's built-in `cache()` + `drawHitFromCache()` on frame and image
+layers — this rasterizes the node once and tells Konva's hit-testing to
+treat fully-transparent cached pixels as "not hit," so the pointer event
+falls through to the next node down, exactly as if the transparent layer
+weren't there. One wrinkle: `drawHitFromCache` is a `Shape`-only method
+(a `Group` draws nothing of its own to rasterize), so for an image layer
+— rendered as a `Group` (for `clipFunc`) wrapping the actual
+`<KonvaImage>` — the cache has to go on that inner shape specifically,
+with the click still bubbling up to fire the `Group`'s own handler like
+any other Konva event, since the drag/select/transform machinery has to
+stay on the `Group` (the layer's full nominal box, unaffected by
+`contain`-mode letterboxing). The cache is a snapshot, not live, so it's
+redone whenever the loaded image or the layer's own size changes. Text
+and shape layers don't get this treatment (yet) — text glyphs are sparse
+too, but frames/images were the reported, concrete problem.
+
+**Frame/image layers now default to full-bleed size, not cut/trim size —
+and the built-in frame art had to be regenerated to match.** New frames
+and newly uploaded/imported images used to size themselves to
+`cutWidthMm`/`cutHeightMm`, deliberately, so they'd match the finished
+card exactly. In practice this meant the bleed margin (the ~3mm strip
+that gets trimmed away, there specifically so a slightly-off cut doesn't
+reveal a sliver of unprinted background around the card) was never
+covered by anything — confirmed by testing: a manually-resized layer
+extending into the bleed rendered and exported completely fine, both
+live and after export, so there was no clipping bug anywhere in the
+pipeline; the *default* size was just never reaching that far in the
+first place. Fixed by sizing new Frame/Image layers (`Toolbar.tsx`'s
+`addFrame`/`addImage`, and the Scryfall art layer) to
+`design.size.widthMm`/`heightMm` (bleed) instead of
+`cutWidthMm`/`cutHeightMm`. Since the bleed margin is a uniform ~3.048mm
+addition on every side rather than a proportional scale-up (see
+`STANDARD_CARD_SIZE_MM` below), simply stretching the existing cut-sized
+placeholder frame art into the bigger box would have distorted it
+slightly (about a 2.6% aspect mismatch) — so
+`generate-placeholder-frames.mjs` was rewritten to draw at true bleed
+dimensions instead: the canvas is filled with the border color first (so
+it reaches the true edge with no gap), then the whole existing
+border/name-bar/type-bar/etc. layout is drawn offset by the same margin,
+and finally the art window is punched back out to transparent with
+`clearRect()` — that fill-first step would otherwise have painted over
+it too, since the window's transparency previously came from just never
+touching that region on a canvas that started transparent by default.
+There's intentionally no separate visibility toggle for this — any
+layer's own width/height already lets you resize it smaller (e.g. back
+to fit only within the cut box) if you don't want it reaching the bleed
+edge, so a global switch would just be a second way to do the same thing.
 
 **An ImageLayer's `fit` field existed in the schema but neither renderer
 actually implemented `contain`/`fill` — both silently always behaved

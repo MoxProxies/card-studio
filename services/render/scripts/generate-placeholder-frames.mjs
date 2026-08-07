@@ -7,6 +7,15 @@
 // (fully transparent), so an Image layer placed underneath a Frame layer
 // shows through as the card's art.
 //
+// Canvas covers the full BLEED size, not just the cut/trim size — frame
+// layers are sized to bleed by default (see Toolbar.tsx's addFrame), so
+// art authored only to cut size would leave a background-color gap around
+// the whole card once printed and trimmed. The bleed margin here is a
+// uniform 3.048mm added on every side (not a proportional scale-up — see
+// packages/scene-schema/src/units.ts's STANDARD_CARD_SIZE_MM for why),
+// converted to px at this canvas's own px/mm so it lines up with the real
+// spec regardless of what CUT_W/CUT_H are set to.
+//
 // Run with: node services/render/scripts/generate-placeholder-frames.mjs
 // Writes into frame-library/classic/ — the canonical source directory for
 // frame art (see README's "Adding frames" section). Run
@@ -20,8 +29,13 @@ import path from "node:path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const W = 630;
-const H = 880;
+const CUT_W = 630;
+const CUT_H = 880;
+const CUT_W_MM = 62.992;
+const BLEED_MARGIN_MM = 3.048;
+const MARGIN = Math.round((CUT_W / CUT_W_MM) * BLEED_MARGIN_MM);
+const W = CUT_W + MARGIN * 2;
+const H = CUT_H + MARGIN * 2;
 
 const THEMES = [
   { fileName: "classic-white.png", primary: "#f8f4e3", accent: "#a9975c" },
@@ -46,41 +60,46 @@ function roundedRectPath(ctx, x, y, w, h, r) {
 function drawFrame({ primary, accent }) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
-  // Canvas starts fully transparent — anything not explicitly painted
-  // (the art window) stays that way.
 
-  // Outer border.
+  // Fill the full bleed canvas with the border color first — this is what
+  // actually reaches the true edge; everything below is positioned in the
+  // same relative layout as before, just offset by MARGIN into this larger
+  // canvas.
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, W, H);
+
+  // Outer border, inset from the *cut* edge (MARGIN in from the canvas edge).
   ctx.lineWidth = 26;
   ctx.strokeStyle = primary;
-  roundedRectPath(ctx, 20, 20, W - 40, H - 40, 22);
+  roundedRectPath(ctx, MARGIN + 20, MARGIN + 20, CUT_W - 40, CUT_H - 40, 22);
   ctx.stroke();
   ctx.lineWidth = 6;
   ctx.strokeStyle = accent;
-  roundedRectPath(ctx, 20, 20, W - 40, H - 40, 22);
+  roundedRectPath(ctx, MARGIN + 20, MARGIN + 20, CUT_W - 40, CUT_H - 40, 22);
   ctx.stroke();
 
   // Name bar.
   ctx.fillStyle = primary;
-  roundedRectPath(ctx, 40, 40, W - 80, 62, 10);
+  roundedRectPath(ctx, MARGIN + 40, MARGIN + 40, CUT_W - 80, 62, 10);
   ctx.fill();
   ctx.lineWidth = 3;
   ctx.strokeStyle = accent;
-  roundedRectPath(ctx, 40, 40, W - 80, 62, 10);
+  roundedRectPath(ctx, MARGIN + 40, MARGIN + 40, CUT_W - 80, 62, 10);
   ctx.stroke();
 
   // Type line bar (sits above the text box, below the art window).
-  const typeBarY = 618;
+  const typeBarY = MARGIN + 618;
   ctx.fillStyle = primary;
-  roundedRectPath(ctx, 40, typeBarY, W - 80, 46, 8);
+  roundedRectPath(ctx, MARGIN + 40, typeBarY, CUT_W - 80, 46, 8);
   ctx.fill();
   ctx.strokeStyle = accent;
-  roundedRectPath(ctx, 40, typeBarY, W - 80, 46, 8);
+  roundedRectPath(ctx, MARGIN + 40, typeBarY, CUT_W - 80, 46, 8);
   ctx.stroke();
 
   // Set-symbol placeholder circle, right end of the type bar.
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.arc(W - 40 - 30, typeBarY + 23, 13, 0, Math.PI * 2);
+  ctx.arc(MARGIN + CUT_W - 40 - 30, typeBarY + 23, 13, 0, Math.PI * 2);
   ctx.fill();
   ctx.lineWidth = 2;
   ctx.strokeStyle = accent;
@@ -90,24 +109,35 @@ function drawFrame({ primary, accent }) {
   const textBoxY = typeBarY + 46 + 8;
   ctx.fillStyle = "#f2ead9";
   ctx.globalAlpha = 0.96;
-  roundedRectPath(ctx, 40, textBoxY, W - 80, H - 40 - textBoxY - 10, 10);
+  roundedRectPath(ctx, MARGIN + 40, textBoxY, CUT_W - 80, MARGIN + CUT_H - 40 - textBoxY - 10, 10);
   ctx.fill();
   ctx.globalAlpha = 1;
   ctx.lineWidth = 3;
   ctx.strokeStyle = accent;
-  roundedRectPath(ctx, 40, textBoxY, W - 80, H - 40 - textBoxY - 10, 10);
+  roundedRectPath(ctx, MARGIN + 40, textBoxY, CUT_W - 80, MARGIN + CUT_H - 40 - textBoxY - 10, 10);
   ctx.stroke();
 
   // Power/toughness box, bottom-right corner, drawn last so it sits on top.
   const ptW = 118;
   const ptH = 52;
   ctx.fillStyle = primary;
-  roundedRectPath(ctx, W - 40 - ptW, H - 40 - ptH, ptW, ptH, 8);
+  roundedRectPath(ctx, MARGIN + CUT_W - 40 - ptW, MARGIN + CUT_H - 40 - ptH, ptW, ptH, 8);
   ctx.fill();
   ctx.lineWidth = 3;
   ctx.strokeStyle = accent;
-  roundedRectPath(ctx, W - 40 - ptW, H - 40 - ptH, ptW, ptH, 8);
+  roundedRectPath(ctx, MARGIN + CUT_W - 40 - ptW, MARGIN + CUT_H - 40 - ptH, ptW, ptH, 8);
   ctx.stroke();
+
+  // Punch the art window back out to fully transparent — the base
+  // full-bleed fill above (needed so the *border* reaches the true edge)
+  // would otherwise paint over it too. Nothing else is drawn in this
+  // region (it sits between the name bar and the type bar), so clearing
+  // it last, after everything else, is safe.
+  const artWindowX = MARGIN + 40;
+  const artWindowY = MARGIN + 102;
+  const artWindowWidth = CUT_W - 80;
+  const artWindowHeight = typeBarY - artWindowY;
+  ctx.clearRect(artWindowX, artWindowY, artWindowWidth, artWindowHeight);
 
   return canvas.encode("png");
 }
