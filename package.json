@@ -7,14 +7,15 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev:editor": "pnpm --filter @card-studio/editor dev",
+    "dev:editor": "node scripts/dev-editor.mjs",
     "dev:render": "pnpm --filter @card-studio/render dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "sync-frames": "node scripts/sync-frame-library.mjs",
     "sync-fonts": "node scripts/sync-font-library.mjs",
     "sync-rarity": "node scripts/sync-rarity-library.mjs",
-    "sync-text-templates": "node scripts/sync-text-templates.mjs"
+    "sync-text-templates": "node scripts/sync-text-templates.mjs",
+    "watch-text-templates": "node scripts/watch-text-templates.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

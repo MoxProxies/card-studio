@@ -255,6 +255,22 @@ there, hand-edit the new category's file to fit that frame — the
 duplicate is the whole point, it's a safe starting point that only
 affects that one category.
 
+**Editing an existing field's numbers day-to-day needs no command at
+all.** `pnpm dev:editor` (`scripts/dev-editor.mjs`) starts the Vite dev
+server *and* `scripts/watch-text-templates.mjs` together — the watcher
+reruns the sync automatically the instant a file under
+`text-template-library/` is saved, and Vite hot-reloads the regenerated
+JSON straight into the running page (it's an ordinary JS module import,
+so this is the same HMR path any other source-file edit gets — no
+manual browser refresh either). Adjust a field's `x`/`y`/`color`/
+whatever, save, and the *next* layer you add from that field picks it
+up — a layer already placed on the canvas keeps whatever values it was
+created with, since template config only supplies a starting point, not
+a live binding. Driving Vite yourself instead of through `dev:editor`?
+Run `pnpm watch-text-templates` alongside it for the same effect, or
+fall back to plain `pnpm sync-text-templates` after each edit — it's the
+same regenerate step, just triggered by hand instead of by a file save.
+
 `Toolbar.tsx` resolves which field set applies from whatever Frame layer
 is currently in the design (`activeFrameCategory`, via
 `getFrameAsset(...).category`) — no frame present, or a category with no
