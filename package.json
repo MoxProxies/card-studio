@@ -14,6 +14,7 @@
     "sync-frames": "node scripts/sync-frame-library.mjs",
     "sync-fonts": "node scripts/sync-font-library.mjs",
     "sync-rarity": "node scripts/sync-rarity-library.mjs",
+    "sync-symbols": "node scripts/sync-symbol-library.mjs",
     "sync-text-templates": "node scripts/sync-text-templates.mjs",
     "watch-text-templates": "node scripts/watch-text-templates.mjs"
   },

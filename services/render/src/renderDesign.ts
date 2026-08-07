@@ -1,7 +1,8 @@
-import { createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
+import { createCanvas, loadImage, type Image, type SKRSContext2D } from "@napi-rs/canvas";
 import { computeObjectFit, Design, Layer, mmToPx, PRINT_DPI, shrinkTextToFit } from "@card-studio/scene-schema";
 import { getFrameAssetPath } from "./frameAssets.js";
 import { getRarityAssetPath } from "./rarityAssets.js";
+import { getSymbolAsset, getSymbolAssetPath, isGenericManaToken } from "./symbolAssets.js";
 
 /**
  * Rasterizes a Design at a given DPI. This is the print-quality path:
@@ -58,7 +59,7 @@ async function drawLayer(ctx: SKRSContext2D, layer: Layer, dpi: number): Promise
       break;
 
     case "text":
-      drawText(ctx, layer, width, height, dpi);
+      await drawText(ctx, layer, width, height, dpi);
       break;
   }
 
@@ -132,7 +133,7 @@ async function drawImage(ctx: SKRSContext2D, layer: Extract<Layer, { type: "imag
   ctx.restore();
 }
 
-function drawText(
+async function drawText(
   ctx: SKRSContext2D,
   layer: Extract<Layer, { type: "text" }>,
   width: number,
@@ -159,16 +160,71 @@ function drawText(
       ctx.font = buildFont(px);
     },
     measureWidth: (text) => ctx.measureText(text).width,
+    // {W}, {T}, {2}, ... — anything the symbol library (or the generic-number
+    // fallback) recognizes becomes a fixed-width inline symbol instead of
+    // literal braces; see symbol-library/ and "Inline symbols" in the README.
+    resolveSymbol: (token) => Boolean(getSymbolAsset(token)) || isGenericManaToken(token),
+    symbolWidth: (px) => px,
   });
+
+  // Preload every distinct real (non-generic-number) symbol image the final
+  // layout actually uses — after shrinking, not before, since font size
+  // (and so which lines/symbols survive) isn't final until shrinkTextToFit
+  // returns.
+  const tokens = new Set<string>();
+  for (const line of lines) {
+    for (const { run } of line.runs) {
+      if (run.kind === "symbol" && !isGenericManaToken(run.text)) tokens.add(run.text);
+    }
+  }
+  const images = new Map<string, Image>();
+  for (const token of tokens) {
+    const assetPath = getSymbolAssetPath(token);
+    if (assetPath) images.set(token, await loadImage(assetPath));
+  }
 
   ctx.fillStyle = layer.color;
   ctx.textBaseline = "top";
-  ctx.textAlign = layer.align;
+  // Runs are drawn individually at pre-computed x offsets (see
+  // shrinkTextToFit), so alignment is applied manually per line below
+  // instead of via ctx.textAlign.
+  ctx.textAlign = "left";
 
   const lineHeightPx = fontSizePx * layer.lineHeight;
-  const originX = layer.align === "left" ? 0 : layer.align === "right" ? width : width / 2;
 
   lines.forEach((line, i) => {
-    ctx.fillText(line, originX, i * lineHeightPx);
+    const lineY = i * lineHeightPx;
+    const alignOffset = layer.align === "left" ? 0 : layer.align === "right" ? width - line.width : (width - line.width) / 2;
+
+    for (const { run, x, width: runWidth } of line.runs) {
+      const drawX = alignOffset + x;
+      if (run.kind === "text") {
+        ctx.fillText(run.text, drawX, lineY);
+      } else if (isGenericManaToken(run.text)) {
+        drawGenericManaSymbol(ctx, run.text, drawX, lineY, runWidth, fontSizePx);
+      } else {
+        const image = images.get(run.text);
+        if (image) ctx.drawImage(image, drawX, lineY, runWidth, fontSizePx);
+      }
+    }
   });
+}
+
+/** Draws a generic mana cost number ({0}, {1}, {2}, ...) as a light-grey
+ * circle with the digits centered on top — one routine covers every
+ * possible value instead of needing a symbol-library SVG per number. */
+function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y: number, size: number, lineHeightPx: number) {
+  ctx.save();
+  const cx = x + size / 2;
+  const cy = y + lineHeightPx / 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+  ctx.fillStyle = "#cccccc";
+  ctx.fill();
+  ctx.fillStyle = "#000000";
+  ctx.font = `bold ${Math.round(size * 0.62)}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(digits, cx, cy);
+  ctx.restore();
 }

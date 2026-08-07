@@ -1,11 +1,13 @@
-import { Group, Image as KonvaImage, Rect, Ellipse, Text } from "react-konva";
+import { Group, Image as KonvaImage, Rect, Ellipse, Circle, Text } from "react-konva";
 import type Konva from "konva";
 import { computeObjectFit, shrinkTextToFit, type Layer } from "@card-studio/scene-schema";
 import { EDITOR_DPI, mmToStagePx } from "../geometry";
 import { useHtmlImage } from "../hooks/useHtmlImage";
+import { useHtmlImages } from "../hooks/useHtmlImages";
 import { useFontsReady } from "../hooks/useFontsReady";
 import { getFrameAssetUrl } from "../frameAssets";
 import { getRarityAssetUrl } from "../rarityAssets";
+import { getSymbolAssetUrl, isGenericManaToken } from "../symbolAssets";
 
 interface LayerNodeProps {
   layer: Layer;
@@ -58,6 +60,46 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => onDragEnd(e.target),
   };
 
+  // Text layout (word-wrap + shrink-to-fit + inline {token} symbols) is
+  // computed unconditionally-in-shape (but conditionally in content) so the
+  // useHtmlImages call below — which must run every render, same as any
+  // other hook — always has a real (possibly empty) src list to work from.
+  let textLayout: ReturnType<typeof shrinkTextToFit> | null = null;
+  let textFontStyle = "normal";
+  if (layer.type === "text" && layer.overflow === "shrink") {
+    const weight = layer.fontWeight === "bold" ? "bold" : "normal";
+    const style = layer.italic ? "italic" : "normal";
+    textFontStyle = [style === "italic" ? "italic" : "", weight === "bold" ? "bold" : ""].filter(Boolean).join(" ") || "normal";
+    const nominalFontSizePx = (layer.fontSizePt / 72) * EDITOR_DPI;
+    const ctx = getMeasureCtx();
+    textLayout = shrinkTextToFit({
+      content: layer.content,
+      startFontSizePx: nominalFontSizePx,
+      maxWidthPx: mmToStagePx(layer.width),
+      maxHeightPx: mmToStagePx(layer.height),
+      lineHeightRatio: layer.lineHeight,
+      shrink: true,
+      setFontSizePx: (px) => {
+        ctx.font = `${style} ${weight} ${px}px ${layer.fontFamily}`;
+      },
+      measureWidth: (text) => ctx.measureText(text).width,
+      resolveSymbol: (token) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token),
+      symbolWidth: (px) => px,
+    });
+  }
+  const symbolUrls: string[] = [];
+  if (textLayout) {
+    for (const line of textLayout.lines) {
+      for (const { run } of line.runs) {
+        if (run.kind === "symbol" && !isGenericManaToken(run.text)) {
+          const url = getSymbolAssetUrl(run.text);
+          if (url) symbolUrls.push(url);
+        }
+      }
+    }
+  }
+  const symbolImages = useHtmlImages(Array.from(new Set(symbolUrls)));
+
   if (layer.type === "frame") {
     if (frameAssetUrl && frameImage) {
       return <KonvaImage {...common} image={frameImage} />;
@@ -88,9 +130,6 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
   }
 
   if (layer.type === "text") {
-    // Konva's fontStyle takes a space-separated combination of "italic"
-    // and "bold" (or "normal" for neither) — same convention as CSS
-    // font-style/font-weight shorthand.
     const weight = layer.fontWeight === "bold" ? "bold" : "normal";
     const style = layer.italic ? "italic" : "normal";
     const fontStyle = [style === "italic" ? "italic" : "", weight === "bold" ? "bold" : ""].filter(Boolean).join(" ") || "normal";
@@ -100,32 +139,57 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     // wrong point relative to what actually prints.
     const nominalFontSizePx = (layer.fontSizePt / 72) * EDITOR_DPI;
 
-    if (layer.overflow === "shrink") {
-      const ctx = getMeasureCtx();
-      const { fontSizePx, lines } = shrinkTextToFit({
-        content: layer.content,
-        startFontSizePx: nominalFontSizePx,
-        maxWidthPx: common.width,
-        maxHeightPx: common.height,
-        lineHeightRatio: layer.lineHeight,
-        shrink: true,
-        setFontSizePx: (px) => {
-          ctx.font = `${style} ${weight} ${px}px ${layer.fontFamily}`;
-        },
-        measureWidth: (text) => ctx.measureText(text).width,
-      });
+    if (textLayout) {
+      const { fontSizePx, lines } = textLayout;
+      const lineHeightPx = fontSizePx * layer.lineHeight;
       return (
-        <Text
-          {...common}
-          text={lines.join("\n")}
-          fontFamily={layer.fontFamily}
-          fontSize={fontSizePx}
-          fontStyle={fontStyle}
-          fill={layer.color}
-          align={layer.align}
-          lineHeight={layer.lineHeight}
-          wrap="none"
-        />
+        <Group {...common}>
+          {lines.map((line, li) => {
+            const lineY = li * lineHeightPx;
+            const alignOffset =
+              layer.align === "left" ? 0 : layer.align === "right" ? common.width - line.width : (common.width - line.width) / 2;
+            return line.runs.map(({ run, x, width: runWidth }, ri) => {
+              const drawX = alignOffset + x;
+              const key = `${li}-${ri}`;
+              if (run.kind === "text") {
+                return (
+                  <Text
+                    key={key}
+                    x={drawX}
+                    y={lineY}
+                    text={run.text}
+                    fontFamily={layer.fontFamily}
+                    fontSize={fontSizePx}
+                    fontStyle={textFontStyle}
+                    fill={layer.color}
+                    listening={false}
+                  />
+                );
+              }
+              if (isGenericManaToken(run.text)) {
+                return (
+                  <Group key={key} x={drawX} y={lineY} listening={false}>
+                    <Circle radius={runWidth / 2} x={runWidth / 2} y={fontSizePx / 2} fill="#cccccc" />
+                    <Text
+                      text={run.text}
+                      width={runWidth}
+                      height={fontSizePx}
+                      align="center"
+                      verticalAlign="middle"
+                      fontSize={Math.round(runWidth * 0.62)}
+                      fontStyle="bold"
+                      fill="#000000"
+                    />
+                  </Group>
+                );
+              }
+              const url = getSymbolAssetUrl(run.text);
+              const img = url ? symbolImages[url] : undefined;
+              if (!img) return null;
+              return <KonvaImage key={key} x={drawX} y={lineY} width={runWidth} height={fontSizePx} image={img} listening={false} />;
+            });
+          })}
+        </Group>
       );
     }
 

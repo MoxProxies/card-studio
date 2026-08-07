@@ -226,6 +226,93 @@ actually reads for a library asset.
 before building on this — no PNG rasterization step needed, unlike frame
 art which is authored as PNG from the start).
 
+## Inline symbols in text
+
+Any text layer with `overflow: "shrink"` (rules text, by default) can mix
+plain characters with `{token}` symbols mid-paragraph — `"{T}: Add {R}."`
+renders a tap symbol and a red mana pip inline, wrapping and shrinking
+along with the surrounding words rather than needing a separate layer.
+This matters for rules text specifically: mana costs sit in their own
+fixed-position field (see [MTG text fields](#mtg-text-fields) below,
+still just a plain string like `"{2}{W}{W}"`), but ability text routinely
+needs a symbol in the middle of a wrapping sentence, which a standalone
+image layer can't do.
+
+**Why this doesn't use a two-glyph colored font**, the way tools like
+[Proxyshop](https://github.com/Investigamer/Proxyshop) do it (confirmed
+by reading its source: each mana symbol is *two* font characters — a
+filled circle glyph plus a black pip glyph authored with a negative left
+side bearing so it lands back on the circle — colored separately via
+Photoshop's per-character rich-text API): that trick exists because
+Photoshop's text API is rich-text-capable but a single `fillText()` call
+isn't, so a font *has* to carry two differently-colored shapes to fake
+per-character color. Canvas here is exactly that same single-color-per-
+call primitive, so if a font hack is going to be necessary, it's
+necessary for canvas too, plus it introduces a font-licensing/authoring
+question we don't have otherwise. Instead, symbols are small SVGs (the
+`SVG loads directly in @napi-rs/canvas` fact already established for
+rarity symbols) drawn inline by the text layout itself — no per-character
+font tricks needed, and no dependency on OpenType color-font (COLR/CPAL)
+support, which is inconsistent enough between Chromium and Skia that
+building on it would've been a gamble.
+
+1. Drop an SVG into `symbol-library/<id>.svg` — flat, like
+   `rarity-library/`. `{W}` looks up `w.svg`, `{W/U}` looks up `w-u.svg`
+   (`/` becomes `-`; token matching lowercases and strips whitespace).
+2. Run `pnpm sync-symbols`. Same copy-to-both-consumers-plus-catalog
+   pattern as frames/rarity: `apps/editor/public/symbols/`,
+   `services/render/assets/symbols/`, `symbolCatalog.generated.json` in
+   both.
+3. Commit everything sync touched.
+
+The shipped set is deliberately small — `w`, `u`, `b`, `r`, `g`, `c`
+(colorless), `t` (tap), `q` (untap) — original, generic circle+letter art
+(not a reproduction of WotC's actual symbols, same reasoning as the
+frame art), enough to prove the mechanism rather than front-load every
+mana symbol, hybrid combination, and Phyrexian variant that exists. Add
+more the same way, any time.
+
+**Generic mana numbers (`{0}`, `{1}`, `{2}`, ... any non-negative
+integer) don't need a symbol-library file at all** — `isGenericManaToken`
+(`symbolAssets.ts`) recognizes pure-digit tokens and a shared routine
+draws a light-grey circle with the digits centered on top at draw time,
+in both the editor (`drawGenericManaSymbol`-equivalent Konva nodes) and
+the render service (`drawGenericManaSymbol` in `renderDesign.ts`) —
+covers arbitrary generic costs without one asset per number.
+
+**How it's implemented, for anyone touching this code:**
+`shrinkTextToFit` (`packages/scene-schema/src/textFit.ts`) — the same
+shared word-wrap/shrink engine both the editor and render service already
+called — now tokenizes each space-separated word into a run list (plain
+text and/or symbols) via an injected `resolveSymbol(token) => boolean`
+predicate, so a `{token}` the caller's asset catalog doesn't recognize
+falls back to its literal `"{token}"` text instead of vanishing. A
+symbol run gets a fixed `symbolWidth(fontSizePx)` (currently 1em square)
+for wrapping purposes, so it wraps as an atomic unit — `"{T}:"` (symbol
+directly followed by punctuation, as MTG text commonly writes it) stays
+together on one line as a single "word." The function's return type
+changed from `lines: string[]` to `lines: LineLayout[]` (each line is a
+list of positioned runs with their own x offset and width) since a line
+is no longer just one string — both callers draw per-run now instead of
+calling `fillText`/`<Text>` once per line: `renderDesign.ts`'s `drawText`
+is `async` as of this change (symbol images load via `loadImage()` after
+the final font size is known, not before — the shrink loop only needs
+each symbol's *width*, a constant, not its pixels), and `LayerNode.tsx`
+renders a `<Group>` of individually positioned `<Text>`/`<KonvaImage>`/
+`<Circle>` nodes per line instead of one `<Text>` node, loading whatever
+distinct symbol images the current content references via a new
+`useHtmlImages` hook (`useHtmlImage`'s single-src version, generalized to
+a dynamic list, since the set of symbols in play changes with content).
+
+**Known limitation:** this only applies to the `"shrink"` overflow mode.
+A layer set to `"clip"` or `"visible"` still renders `{W}` as literal
+characters in the editor (Konva's native word-wrap, unchanged) — though
+the render service, which already funneled every overflow mode through
+`shrinkTextToFit`, resolves symbols for those too, so exports can
+technically differ from what those two modes show on screen. Worth
+closing if a design actually uses inline symbols outside shrink mode;
+not done yet since rules text — the primary use case — always shrinks.
+
 ## MTG text fields
 
 Text field placement/font/color is directory-driven and per-frame, the
@@ -552,3 +639,11 @@ Not implemented yet, but the shape of it:
 - An API layer in front of `services/render` (it's currently a bare
   render endpoint, no auth, no storage of results)
 - Deploy config for either app
+- Inline symbols outside `overflow: "shrink"` (see [Inline symbols in
+  text](#inline-symbols-in-text)'s known limitation)
+- "Grow to fill" text sizing — `shrinkTextToFit` only ever reduces
+  `fontSizePt` when content overflows; short content just renders at the
+  authored size, however small that looks in a large box. A template-
+  defined min/max range with the font size searching both directions
+  (not just down) is a natural extension of the same shrink loop, not
+  built yet

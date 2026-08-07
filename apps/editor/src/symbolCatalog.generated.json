@@ -1,0 +1,42 @@
+[
+  {
+    "id": "b",
+    "label": "B",
+    "fileName": "b.svg"
+  },
+  {
+    "id": "c",
+    "label": "C",
+    "fileName": "c.svg"
+  },
+  {
+    "id": "g",
+    "label": "G",
+    "fileName": "g.svg"
+  },
+  {
+    "id": "q",
+    "label": "Q",
+    "fileName": "q.svg"
+  },
+  {
+    "id": "r",
+    "label": "R",
+    "fileName": "r.svg"
+  },
+  {
+    "id": "t",
+    "label": "T",
+    "fileName": "t.svg"
+  },
+  {
+    "id": "u",
+    "label": "U",
+    "fileName": "u.svg"
+  },
+  {
+    "id": "w",
+    "label": "W",
+    "fileName": "w.svg"
+  }
+]
