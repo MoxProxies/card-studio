@@ -13,8 +13,8 @@ import { FONT_CATALOG } from "./fontAssets";
  */
 export function preloadEmbeddedFonts(): void {
   for (const { family, weights } of FONT_CATALOG) {
-    for (const { weight } of weights) {
-      document.fonts.load(`${weight} 16px "${family}"`).catch(() => {});
+    for (const { weight, style } of weights) {
+      document.fonts.load(`${style} ${weight} 16px "${family}"`).catch(() => {});
     }
   }
 }

@@ -56,12 +56,20 @@ The editor (`apps/editor`) currently supports:
   draggable widths (`App.tsx`, `ResizeHandle.tsx`).
 - A "Text Fields" menu inserts the standard MTG text fields (title,
   mana cost, nickname, typeline, rules, flavor, P/T, artist/credit) at
-  positions matching a classic MTG layout, individually or all at once
-  — see [MTG text fields](#mtg-text-fields) below.
+  positions matching a classic MTG layout, individually or all at once,
+  using whichever frame the design currently has to pick a config — see
+  [MTG text fields](#mtg-text-fields) below.
+- Text boxes shrink their font size to fit their box live in the editor
+  (not just at export time), and support italic (uses the font's real
+  italic file if the embedded family has one, otherwise a synthesized
+  slant — same as bold).
 - Embedded fonts: a folder-driven catalog (parallel to the frame
   library) with a dropdown in the properties panel, and a config
   constant for the default new text starts with — see
   [Adding fonts](#adding-fonts) below.
+- A rarity dropdown places/swaps a rarity-symbol image layer at a
+  config-adjustable position — see
+  [Adding/changing rarity symbols](#addingchanging-rarity-symbols) below.
 
 ## Layout
 
@@ -116,9 +124,12 @@ if you want to tweak the 6 built-in placeholder designs.
 1. Drop a font file into `font-library/<Family Name>/<weight>.woff2` (or
    `.woff`/`.ttf`/`.otf`), e.g. `font-library/Playfair Display/700.woff2`.
    `<weight>` must be the CSS font-weight number for that file — 400 for
-   regular, 700 for bold. A font used at both weights needs both files;
-   the current `fontWeight` field only distinguishes normal/bold (no
-   italic yet), so that's all two files buys you today.
+   regular, 700 for bold. A font used at both weights needs both files.
+   Add `-italic` before the extension for a real italic design at that
+   weight, e.g. `400-italic.woff2` — optional; a weight with no italic
+   file still gets a working italic (the browser/print engine synthesizes
+   a slant), this only matters for using the font's *actual* italic
+   letterforms instead of a slanted regular.
 2. Run `pnpm sync-fonts`. This copies the file into both
    `apps/editor/public/fonts/` and `services/render/assets/fonts/`,
    regenerates both `fontCatalog.generated.json` files, and regenerates
@@ -133,11 +144,28 @@ The new family shows up in the properties panel's font dropdown (under
 catalog (or a system font), otherwise it silently falls back to whatever
 the browser picks and print output won't match what the editor showed.
 
-The repo ships with [Inter](https://github.com/rsms/inter) (regular +
-bold) under the SIL Open Font License 1.1 — see
+The repo ships with [Inter](https://github.com/rsms/inter) (regular,
+bold, and both their italics) under the SIL Open Font License 1.1 — see
 `font-library/Inter/LICENSE.txt` — sourced from the `@fontsource/inter`
 npm package's static files (that package isn't a runtime dependency;
 only its files were copied in).
+
+**A redundant `normal` keyword in a canvas font string silently defeats
+italic — but only server-side.** `services/render/src/renderDesign.ts`
+originally built `ctx.font` as `` `${style} ${weight} ${size}px
+${family}` `` unconditionally, so normal-weight italic text became the
+string `"italic normal 16px Inter"`. Chromium's canvas parses that fine
+(it normalizes away the redundant weight keyword and keeps the italic),
+which is why the editor's live Konva rendering (`LayerNode.tsx`, which
+already omitted default keywords) looked correct — but `@napi-rs/canvas`
+(Skia) parses the same string differently and silently drops the italic,
+rendering upright text instead. Confirmed by rendering both engines'
+interpretation of that exact string side by side before fixing it.
+Fixed by only ever including the non-default tokens (`italic`, `bold`)
+in the font string, the same way `LayerNode.tsx` already built its
+`fontStyle` — never emit a literal `normal`. Worth remembering for any
+future canvas-font-string code: don't assume Skia's parser is as
+forgiving as Chromium's.
 
 **Print exports must use the same font the editor showed, or the
 "preview" lied.** `services/render/src/fontAssets.ts` registers every
@@ -167,23 +195,128 @@ even if the preload race is lost. Reproduced the bug and confirmed the
 fix by screenshotting a text layer added within ~150ms of page load,
 before and after.
 
+## Adding/changing rarity symbols
+
+1. Drop (or edit) an SVG into `rarity-library/<id>.svg`, e.g.
+   `rarity-library/mythic.svg`. Flat, not folders — there's one fixed set
+   of rarity symbols, not an open-ended library like frames/fonts.
+2. Run `pnpm sync-rarity`. This copies the file into both
+   `apps/editor/public/rarity/` and `services/render/assets/rarity/`, and
+   regenerates both `rarityCatalog.generated.json` files.
+3. Commit everything sync touched. If you added a new id (not just
+   edited an existing symbol), also add it to `RARITY_DISPLAY_ORDER` in
+   `apps/editor/src/rarityConfig.ts` so the dropdown lists it in the
+   right place instead of appending it alphabetically at the end.
+
+The toolbar's rarity dropdown (`Toolbar.tsx`'s `setRarity`) finds-or-
+creates a single image layer with a fixed, well-known id
+(`RARITY_LAYER_ID` in `rarityConfig.ts`) rather than tracking "which
+layer is the rarity symbol" as separate UI state — picking a rarity
+either adds that layer (sized/positioned from `RARITY_SYMBOL_BOX`, also
+in `rarityConfig.ts` — hand-tune it if a frame's type line sits
+somewhere else) or swaps the existing one's asset, and picking the blank
+"Rarity…" option removes it. The layer stores `assetId` (e.g.
+`"mythic"`) as the source of truth, resolved against the rarity catalog
+by both the editor and the render service the same way a frame's
+`assetId` is — `src` is kept alongside it as a browser-usable URL cache
+so the layer stays self-describing, but isn't what either renderer
+actually reads for a library asset.
+
+`@napi-rs/canvas`'s `loadImage()` handles `.svg` files directly (checked
+before building on this — no PNG rasterization step needed, unlike frame
+art which is authored as PNG from the start).
+
 ## MTG text fields
 
-`apps/editor/src/textTemplates.ts` defines the standard fields (title,
-nickname, mana cost, typeline, rules, flavor, power/toughness,
-artist/credit) as independent constants — each field's `x`/`y`/`width`/
-`height` (mm, relative to the *cut* corner, not the full-bleed canvas)
-and font settings are hand-picked to roughly match a classic MTG layout,
-not derived from a shared grid formula. That's deliberate: if one field
-looks slightly off against a particular frame, open this file and adjust
-just that field's numbers — nothing else depends on them or needs to
-change in step. The "Text Fields" toolbar menu (`TextTemplateMenu.tsx`)
-converts a template to an actual text layer (offsetting by the
-cut-to-canvas margin) when you pick one, or all eight when you pick
-"Add all fields" — the latter lands as a single undo step
-(`addLayers` in the store), not eight.
+Text field placement/font/color is directory-driven and per-frame, the
+same shape as the frame and font libraries:
+
+```
+text-template-library/
+  _base.json       the default/fallback field set
+  classic.json      override for frame-library/classic/'s frames
+```
+
+Each file is a JSON array of the standard fields (title, nickname, mana
+cost, typeline, rules, flavor, power/toughness, artist/credit) — each
+field's `x`/`y`/`width`/`height` (mm, relative to the *cut* corner, not
+the full-bleed canvas), font settings, and `color` are independent
+values, not derived from a shared grid formula. That's deliberate: if
+one field looks slightly off against a particular frame, open that
+frame's category file and adjust just that field's numbers — nothing
+else depends on them or needs to change in step.
+
+Run `pnpm sync-text-templates` any time you add a new `frame-library/`
+category: it creates that category's `text-template-library/<category>.json`
+as a verbatim duplicate of `_base.json` if one doesn't already exist yet
+(never overwrites an existing one), then rebuilds the consolidated
+`apps/editor/src/textTemplateCatalog.generated.json` every run. From
+there, hand-edit the new category's file to fit that frame — the
+duplicate is the whole point, it's a safe starting point that only
+affects that one category.
+
+`Toolbar.tsx` resolves which field set applies from whatever Frame layer
+is currently in the design (`activeFrameCategory`, via
+`getFrameAsset(...).category`) — no frame present, or a category with no
+override file yet, falls back to `_base.json`. The "Text Fields" toolbar
+menu (`TextTemplateMenu.tsx`) converts a resolved template to an actual
+text layer (offsetting by the cut-to-canvas margin, and using the
+template's `color`) when you pick one, or all eight when you pick "Add
+all fields" — the latter lands as a single undo step (`addLayers` in the
+store), not eight.
+
+**Shrink-to-fit runs live in the editor now, not just at export.** Text
+boxes with `overflow: "shrink"` used to only actually shrink in the
+`services/render` print export (`renderDesign.ts`'s `drawText`) — the
+editor's Konva rendering just word-wrapped at the nominal font size
+regardless of whether it fit the box, a real "what you see isn't what
+prints" gap. Fixed by extracting the wrap/shrink loop into a shared,
+engine-agnostic helper (`shrinkTextToFit` in
+`packages/scene-schema/src/textFit.ts`, parameterized over a
+`measureWidth`/`setFontSizePx` pair) that both `LayerNode.tsx` (using a
+scratch, never-attached `<canvas>` 2D context to measure) and
+`renderDesign.ts` (using its `SKRSContext2D`) now call — the two engines
+have incompatible context types but an identical-enough 2D canvas text
+API that duplicating the algorithm would've been the only alternative.
+`LayerNode.tsx` also needed `useFontsReady()` (a small hook bumping state
+on `document.fonts.ready`/`loadingdone`) since a shrink calculation that
+runs once during React render, using a canvas context whose font hasn't
+actually finished loading yet, gets wrong (fallback-font) metrics baked
+in — unlike glyph painting, a later `stage.batchDraw()` alone doesn't
+recompute it.
+
+Fixing this surfaced a second, unrelated bug worth knowing about:
+**`LayerNode.tsx` was converting `fontSizePt` to on-screen pixels at a
+fixed 96 DPI, while every other measurement (the layer's box, via
+`mmToStagePx`) used `EDITOR_DPI` (150).** Font size and box size were
+each scaling from a different physical reference, so text rendered about
+36% smaller on screen, relative to its box, than it does in the print
+export — meaning a shrink threshold computed from these numbers would've
+tripped at the wrong point. Fixed by deriving font size from
+`EDITOR_DPI` too, the same as everything else on the canvas.
 
 ## Design decisions
+
+**An ImageLayer's `fit` field existed in the schema but neither renderer
+actually implemented `contain`/`fill` — both silently always behaved
+like `cover`.** Both `LayerNode.tsx`'s plain `<KonvaImage>` (stretched to
+the layer's box, i.e. `fill`) and `renderDesign.ts`'s `drawImage`
+(always scaled to the *larger* of the two axis ratios and clipped, i.e.
+`cover`) ignored the field entirely — harmless while every image layer's
+box happened to already be sized to the image's own aspect ratio
+(`addImage` picks the box that way), but it would silently distort
+anything placed in a box of a different aspect ratio, which the rarity
+symbols are (a square-ish SVG dropped into a hand-picked box). Fixed
+with a shared `computeObjectFit` helper
+(`packages/scene-schema/src/objectFit.ts`, the same CSS `object-fit`
+math for all three modes) that both sides now call — `LayerNode.tsx`
+wraps the image in a `Group` sized to the box (clipped only for `cover`)
+with the inner `<KonvaImage>` sized/offset by the fit result;
+`renderDesign.ts`'s `drawImage` does the equivalent with `ctx.clip()`.
+Verified by rendering the same box in all three modes side by side —
+`contain` centers the unscaled-aspect image inside the box, `cover`
+scales up and clips, `fill` stretches — where before all three looked
+identical.
 
 **Scene JSON is DPI-independent (millimeters, not pixels).** A `Design`
 is a background color plus an ordered list of `Layer`s (`frame`,
@@ -382,16 +515,15 @@ Not implemented yet, but the shape of it:
 
 ## Not built yet
 
-- In-app frame/font upload (adding either is a file-drop + `pnpm
-  sync-frames`/`sync-fonts` + commit workflow today — see
-  [Adding frames](#adding-frames) / [Adding fonts](#adding-fonts) — not a
-  button in the UI; there's also no way yet for a running deployment to
-  pick up a new frame or font without a rebuild/redeploy)
+- In-app frame/font/rarity-symbol/text-template upload (adding any of
+  these is a file-drop + `pnpm sync-*` + commit workflow today — see
+  [Adding frames](#adding-frames) / [Adding fonts](#adding-fonts) /
+  [Adding/changing rarity symbols](#addingchanging-rarity-symbols) — not
+  a button in the UI; there's also no way yet for a running deployment
+  to pick up a new one without a rebuild/redeploy)
 - Persistence (saving/loading designs — currently all in-memory,
   including panel widths and the safe-area toggle, which reset on reload)
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare
   render endpoint, no auth, no storage of results)
-- Italic/oblique text (only normal/bold weight today — matters for
-  flavor text, which is conventionally italicized)
 - Deploy config for either app

@@ -5,8 +5,12 @@
 // this any time you add, rename, or remove a file under font-library/ —
 // see README's "Adding fonts" section.
 //
-// font-library/<Family>/<weight>.<ext>  e.g. font-library/Inter/700.woff2
-// <weight> must be a CSS font-weight number (400 = normal, 700 = bold).
+// font-library/<Family>/<weight>.<ext>          e.g. font-library/Inter/700.woff2
+// font-library/<Family>/<weight>-italic.<ext>   e.g. font-library/Inter/400-italic.woff2
+// <weight> must be a CSS font-weight number (400 = normal, 700 = bold). The
+// "-italic" suffix is optional; a weight with no italic file still gets a
+// working (browser/Skia-synthesized slanted) italic when text asks for
+// one — this only matters for using the font's *real* italic design.
 //
 // Run with: node scripts/sync-font-library.mjs
 
@@ -45,14 +49,18 @@ function scanCatalog() {
     const weights = [];
     for (const file of files) {
       const ext = path.extname(file.name).toLowerCase();
-      const weight = Number(path.basename(file.name, ext));
+      const stem = path.basename(file.name, ext);
+      const italicMatch = stem.match(/^(.+)-italic$/);
+      const style = italicMatch ? "italic" : "normal";
+      const weight = Number(italicMatch ? italicMatch[1] : stem);
       if (!Number.isFinite(weight)) {
-        console.warn(`Skipping ${family}/${file.name}: filename isn't a CSS font-weight number (e.g. 400.woff2).`);
+        console.warn(`Skipping ${family}/${file.name}: filename isn't a CSS font-weight number, optionally suffixed`);
+        console.warn(`  "-italic" (e.g. 400.woff2, 400-italic.woff2).`);
         continue;
       }
-      weights.push({ weight, fileName: file.name, format: FORMAT_BY_EXT[ext] });
+      weights.push({ weight, style, fileName: file.name, format: FORMAT_BY_EXT[ext] });
     }
-    weights.sort((a, b) => a.weight - b.weight);
+    weights.sort((a, b) => a.weight - b.weight || a.style.localeCompare(b.style));
     if (weights.length > 0) families.push({ family, weights });
   }
   families.sort((a, b) => a.family.localeCompare(b.family));
@@ -62,11 +70,11 @@ function scanCatalog() {
 function buildFontFaceCss(families) {
   const blocks = [];
   for (const { family, weights } of families) {
-    for (const { weight, fileName, format } of weights) {
+    for (const { weight, style, fileName, format } of weights) {
       blocks.push(
         `@font-face {\n` +
           `  font-family: "${family}";\n` +
-          `  font-style: normal;\n` +
+          `  font-style: ${style};\n` +
           `  font-weight: ${weight};\n` +
           `  font-display: swap;\n` +
           `  src: url("/fonts/${family}/${fileName}") format("${format}");\n` +

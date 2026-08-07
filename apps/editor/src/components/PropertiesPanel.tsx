@@ -5,6 +5,7 @@ import {
   Lock,
   Unlock,
   Bold,
+  Italic,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -292,14 +293,23 @@ export function PropertiesPanel({ width }: { width: number }) {
               />
             </div>
             <div style={fieldRowStyle}>
-              <span style={labelStyle}>Weight</span>
-              <button
-                className={`cs-icon-btn${layer.fontWeight === "bold" ? " cs-active" : ""}`}
-                title="Bold"
-                onClick={() => commitLayerChange(layer.id, { fontWeight: layer.fontWeight === "bold" ? "normal" : "bold" })}
-              >
-                <Bold size={15} />
-              </button>
+              <span style={labelStyle}>Style</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button
+                  className={`cs-icon-btn${layer.fontWeight === "bold" ? " cs-active" : ""}`}
+                  title="Bold"
+                  onClick={() => commitLayerChange(layer.id, { fontWeight: layer.fontWeight === "bold" ? "normal" : "bold" })}
+                >
+                  <Bold size={15} />
+                </button>
+                <button
+                  className={`cs-icon-btn${layer.italic ? " cs-active" : ""}`}
+                  title="Italic — uses the font's real italic file if the embedded family has one, otherwise a slanted (synthetic) italic"
+                  onClick={() => commitLayerChange(layer.id, { italic: !layer.italic })}
+                >
+                  <Italic size={15} />
+                </button>
+              </div>
             </div>
           </div>
           <div style={twoColStyle}>

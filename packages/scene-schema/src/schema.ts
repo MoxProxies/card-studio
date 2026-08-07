@@ -30,13 +30,21 @@ export const FrameLayer = LayerBase.extend({
 
 export const ImageLayer = LayerBase.extend({
   type: z.literal("image"),
-  /** URL or asset id of the user's art / uploaded image. */
+  /** URL of the user's art / uploaded image, or a browser-usable URL
+   * cache of `assetId`'s resolved asset when that's set. */
   src: z.string(),
   fit: z.enum(["cover", "contain", "fill"]).default("cover"),
   /** Crop rect in source-image fractional coords (0-1), applied before fit. */
   crop: z
     .object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
     .optional(),
+  /** If set, this image is a static library asset (e.g. a rarity symbol)
+   * resolved by id against that library's catalog rather than
+   * user-uploaded content — assetId is the source of truth for what to
+   * draw; `src` is kept as a same-value browser-usable URL alongside it
+   * so the layer stays self-describing (e.g. for design JSON export)
+   * without needing the catalog. Unset for ordinary uploaded art. */
+  assetId: z.string().optional(),
 });
 
 export const TextLayer = LayerBase.extend({
@@ -45,6 +53,7 @@ export const TextLayer = LayerBase.extend({
   fontFamily: z.string().default("Inter"),
   fontSizePt: z.number().positive().default(12),
   fontWeight: z.union([z.literal("normal"), z.literal("bold"), z.number()]).default("normal"),
+  italic: z.boolean().default(false),
   color: z.string().default("#000000"),
   align: z.enum(["left", "center", "right"]).default("left"),
   lineHeight: z.number().positive().default(1.2),

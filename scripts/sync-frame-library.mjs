@@ -11,6 +11,7 @@
 import { readdirSync, mkdirSync, rmSync, copyFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { humanize } from "./lib/slug.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_DIR = path.join(ROOT, "frame-library");
@@ -26,16 +27,6 @@ const TARGETS = [
     catalogFile: path.join(ROOT, "services/render/src/frameCatalog.generated.json"),
   },
 ];
-
-function humanize(slug) {
-  return slug
-    .replace(/[-_]+/g, " ")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
 
 function scanCatalog() {
   const categories = readdirSync(SOURCE_DIR, { withFileTypes: true }).filter((e) => e.isDirectory());

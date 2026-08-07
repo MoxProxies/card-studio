@@ -8,7 +8,10 @@ import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
 import { FrameLibraryModal } from "./FrameLibraryModal";
 import { TextTemplateMenu } from "./TextTemplateMenu";
-import { MTG_TEXT_TEMPLATES, type TextFieldTemplate } from "../textTemplates";
+import { getTextTemplates, type TextFieldTemplate } from "../textTemplates";
+import { getFrameAsset } from "../frameAssets";
+import { RARITY_ASSETS, getRarityAssetUrl } from "../rarityAssets";
+import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX } from "../rarityConfig";
 import { DEFAULT_FONT_FAMILY } from "../config";
 
 function newId(): string {
@@ -28,6 +31,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
   const addLayers = useDesignStore((s) => s.addLayers);
+  const commitLayerChange = useDesignStore((s) => s.commitLayerChange);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
   const removeLayers = useDesignStore((s) => s.removeLayers);
@@ -81,6 +85,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       fontFamily: DEFAULT_FONT_FAMILY,
       fontSizePt: 14,
       fontWeight: "normal",
+      italic: false,
       color: "#111111",
       align: "left",
       lineHeight: 1.2,
@@ -92,11 +97,20 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       ...centerBox(),
     });
 
-  // MTG_TEXT_TEMPLATES positions are relative to the cut/trim corner, not
-  // the full-bleed canvas layers actually live in — offset by the same
-  // margin the cut-line guide uses.
+  // Text-field positions are relative to the cut/trim corner, not the
+  // full-bleed canvas layers actually live in — offset by the same margin
+  // the cut-line guide uses.
   const cutOffsetX = (design.size.widthMm - design.size.cutWidthMm) / 2;
   const cutOffsetY = (design.size.heightMm - design.size.cutHeightMm) / 2;
+
+  // Which text-field config applies is driven by the design's current
+  // frame: each frame-library/ category can have its own
+  // text-template-library/<category>.json override (position/font/color
+  // tuned to fit that frame), falling back to the base/default set when
+  // no frame is present yet, or its category has no override of its own.
+  const activeFrameLayer = design.layers.find((l): l is Extract<Layer, { type: "frame" }> => l.type === "frame");
+  const activeFrameCategory = activeFrameLayer ? getFrameAsset(activeFrameLayer.assetId)?.category : undefined;
+  const textTemplates = getTextTemplates(activeFrameCategory);
 
   const templateToLayer = (template: TextFieldTemplate): Layer => ({
     id: newId(),
@@ -106,7 +120,8 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     fontFamily: DEFAULT_FONT_FAMILY,
     fontSizePt: template.fontSizePt,
     fontWeight: template.fontWeight,
-    color: "#111111",
+    italic: false,
+    color: template.color,
     align: template.align,
     lineHeight: 1.15,
     overflow: "shrink",
@@ -121,7 +136,50 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   });
 
   const addTextField = (template: TextFieldTemplate) => addLayer(templateToLayer(template));
-  const addAllTextFields = () => addLayers(MTG_TEXT_TEMPLATES.map(templateToLayer));
+  const addAllTextFields = () => addLayers(textTemplates.map(templateToLayer));
+
+  // The rarity-symbol image is a singleton, found-or-created by its fixed
+  // id (RARITY_LAYER_ID) rather than tracked as separate UI state — see
+  // rarityConfig.ts.
+  const rarityLayer = design.layers.find((l): l is Extract<Layer, { type: "image" }> => l.type === "image" && l.id === RARITY_LAYER_ID);
+  const currentRarityId = rarityLayer?.assetId ?? "";
+  const orderedRarities = [...RARITY_ASSETS].sort((a, b) => {
+    const ai = RARITY_DISPLAY_ORDER.indexOf(a.id);
+    const bi = RARITY_DISPLAY_ORDER.indexOf(b.id);
+    if (ai === -1 && bi === -1) return a.label.localeCompare(b.label);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  const setRarity = (rarityId: string) => {
+    if (!rarityId) {
+      if (rarityLayer) removeLayers([RARITY_LAYER_ID]);
+      return;
+    }
+    const url = getRarityAssetUrl(rarityId);
+    if (!url) return;
+    if (rarityLayer) {
+      commitLayerChange(RARITY_LAYER_ID, { assetId: rarityId, src: url });
+      return;
+    }
+    addLayer({
+      id: RARITY_LAYER_ID,
+      name: "Rarity Symbol",
+      type: "image",
+      assetId: rarityId,
+      src: url,
+      fit: "contain",
+      rotationDeg: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      x: cutOffsetX + RARITY_SYMBOL_BOX.x,
+      y: cutOffsetY + RARITY_SYMBOL_BOX.y,
+      width: RARITY_SYMBOL_BOX.width,
+      height: RARITY_SYMBOL_BOX.height,
+    });
+  };
 
   const addImage = async (file: File) => {
     const src = URL.createObjectURL(file);
@@ -187,7 +245,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       <button className="cs-btn" onClick={addText}>
         <Type size={16} /> Text
       </button>
-      <TextTemplateMenu onAdd={addTextField} onAddAll={addAllTextFields} />
+      <TextTemplateMenu templates={textTemplates} onAdd={addTextField} onAddAll={addAllTextFields} />
       <button className="cs-btn" onClick={addShape}>
         <Shapes size={16} /> Shape
       </button>
@@ -204,6 +262,20 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           }}
         />
       </label>
+      <select
+        className="cs-input"
+        style={{ width: 130 }}
+        value={currentRarityId}
+        onChange={(e) => setRarity(e.target.value)}
+        title="Rarity symbol — prefills its position from RARITY_SYMBOL_BOX in rarityConfig.ts"
+      >
+        <option value="">Rarity…</option>
+        {orderedRarities.map((r) => (
+          <option key={r.id} value={r.id}>
+            {r.label}
+          </option>
+        ))}
+      </select>
 
       <div className="cs-divider" />
 

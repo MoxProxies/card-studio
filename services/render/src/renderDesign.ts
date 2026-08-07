@@ -1,6 +1,7 @@
 import { createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
-import { Design, Layer, mmToPx, PRINT_DPI } from "@card-studio/scene-schema";
+import { computeObjectFit, Design, Layer, mmToPx, PRINT_DPI, shrinkTextToFit } from "@card-studio/scene-schema";
 import { getFrameAssetPath } from "./frameAssets.js";
+import { getRarityAssetPath } from "./rarityAssets.js";
 
 /**
  * Rasterizes a Design at a given DPI. This is the print-quality path:
@@ -53,7 +54,7 @@ async function drawLayer(ctx: SKRSContext2D, layer: Layer, dpi: number): Promise
       break;
 
     case "image":
-      await drawImage(ctx, layer.src, width, height);
+      await drawImage(ctx, layer, width, height);
       break;
 
     case "text":
@@ -115,16 +116,19 @@ function roundedRect(ctx: SKRSContext2D, x: number, y: number, w: number, h: num
   ctx.closePath();
 }
 
-async function drawImage(ctx: SKRSContext2D, src: string, width: number, height: number) {
-  const image = await loadImage(src);
-  const scale = Math.max(width / image.width, height / image.height);
-  const drawW = image.width * scale;
-  const drawH = image.height * scale;
+async function drawImage(ctx: SKRSContext2D, layer: Extract<Layer, { type: "image" }>, width: number, height: number) {
+  // A library asset (e.g. a rarity symbol) resolves by id against its own
+  // catalog on disk; ordinary uploaded art uses `src` directly.
+  const source = (layer.assetId && getRarityAssetPath(layer.assetId)) || layer.src;
+  const image = await loadImage(source);
+  const fit = computeObjectFit(layer.fit, width, height, image.width, image.height);
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, width, height);
-  ctx.clip();
-  ctx.drawImage(image, (width - drawW) / 2, (height - drawH) / 2, drawW, drawH);
+  if (fit.clip) {
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
+  }
+  ctx.drawImage(image, fit.offsetX, fit.offsetY, fit.drawWidth, fit.drawHeight);
   ctx.restore();
 }
 
@@ -136,24 +140,27 @@ function drawText(
   dpi: number
 ) {
   const ptToPx = (pt: number) => (pt / 72) * dpi;
-  let fontSizePx = ptToPx(layer.fontSizePt);
-  const weight = layer.fontWeight === "bold" ? "bold" : "normal";
+  // Skia's font-string parser (unlike Chromium's) doesn't disambiguate an
+  // explicit "normal" alongside "italic" — "italic normal 16px Inter"
+  // silently drops the italic style instead of reading "normal" as the
+  // font-weight — so build the string from only the non-default tokens
+  // rather than always naming style and weight.
+  const fontKeywords = [layer.italic ? "italic" : "", layer.fontWeight === "bold" ? "bold" : ""].filter(Boolean);
+  const buildFont = (px: number) => [...fontKeywords, `${px}px`, layer.fontFamily].join(" ");
 
-  const layOut = (size: number) => {
-    ctx.font = `${weight} ${size}px ${layer.fontFamily}`;
-    return wrapText(ctx, layer.content, width);
-  };
+  const { fontSizePx, lines } = shrinkTextToFit({
+    content: layer.content,
+    startFontSizePx: ptToPx(layer.fontSizePt),
+    maxWidthPx: width,
+    maxHeightPx: height,
+    lineHeightRatio: layer.lineHeight,
+    shrink: layer.overflow === "shrink",
+    setFontSizePx: (px) => {
+      ctx.font = buildFont(px);
+    },
+    measureWidth: (text) => ctx.measureText(text).width,
+  });
 
-  let lines = layOut(fontSizePx);
-  if (layer.overflow === "shrink") {
-    const lineHeightPx = () => fontSizePx * layer.lineHeight;
-    while (lines.length * lineHeightPx() > height && fontSizePx > 4) {
-      fontSizePx -= 1;
-      lines = layOut(fontSizePx);
-    }
-  }
-
-  ctx.font = `${weight} ${fontSizePx}px ${layer.fontFamily}`;
   ctx.fillStyle = layer.color;
   ctx.textBaseline = "top";
   ctx.textAlign = layer.align;
@@ -164,23 +171,4 @@ function drawText(
   lines.forEach((line, i) => {
     ctx.fillText(line, originX, i * lineHeightPx);
   });
-}
-
-function wrapText(ctx: SKRSContext2D, content: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  for (const paragraph of content.split("\n")) {
-    const words = paragraph.split(" ");
-    let current = "";
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (ctx.measureText(candidate).width > maxWidth && current) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = candidate;
-      }
-    }
-    lines.push(current);
-  }
-  return lines;
 }

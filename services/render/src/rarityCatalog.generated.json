@@ -1,0 +1,22 @@
+[
+  {
+    "id": "common",
+    "label": "Common",
+    "fileName": "common.svg"
+  },
+  {
+    "id": "mythic",
+    "label": "Mythic",
+    "fileName": "mythic.svg"
+  },
+  {
+    "id": "rare",
+    "label": "Rare",
+    "fileName": "rare.svg"
+  },
+  {
+    "id": "uncommon",
+    "label": "Uncommon",
+    "fileName": "uncommon.svg"
+  }
+]

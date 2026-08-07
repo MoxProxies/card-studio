@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { LayoutTemplate, ChevronDown } from "lucide-react";
-import { MTG_TEXT_TEMPLATES, type TextFieldTemplate } from "../textTemplates";
+import type { TextFieldTemplate } from "../textTemplates";
 
 interface TextTemplateMenuProps {
+  /** The field set to list — already resolved for the design's current
+   * frame category (or the base/default set if none applies), see
+   * Toolbar.tsx. */
+  templates: TextFieldTemplate[];
   onAdd: (template: TextFieldTemplate) => void;
   onAddAll: () => void;
 }
@@ -10,7 +14,7 @@ interface TextTemplateMenuProps {
 /** Toolbar dropdown for inserting the standard MTG text fields (title,
  * mana cost, typeline, ...) at their pre-set positions — either one at a
  * time or all at once. */
-export function TextTemplateMenu({ onAdd, onAddAll }: TextTemplateMenuProps) {
+export function TextTemplateMenu({ templates, onAdd, onAddAll }: TextTemplateMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +67,7 @@ export function TextTemplateMenu({ onAdd, onAddAll }: TextTemplateMenuProps) {
             Add all fields
           </button>
           <div style={{ height: 1, background: "var(--cs-border)", margin: "4px 0" }} />
-          {MTG_TEXT_TEMPLATES.map((template) => (
+          {templates.map((template) => (
             <button
               key={template.id}
               className="cs-btn"
