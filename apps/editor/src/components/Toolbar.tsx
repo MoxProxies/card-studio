@@ -1,6 +1,6 @@
 import type Konva from "konva";
 import type { RefObject } from "react";
-import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download } from "lucide-react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
@@ -9,6 +9,8 @@ import { FRAME_ASSETS } from "../frameAssets";
 function newId(): string {
   return crypto.randomUUID();
 }
+
+const fmt = (mm: number) => Number(mm.toFixed(2)).toString();
 
 export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
@@ -20,6 +22,8 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const redo = useDesignStore((s) => s.redo);
   const canUndo = useDesignStore((s) => s.past.length > 0);
   const canRedo = useDesignStore((s) => s.future.length > 0);
+  const showSafeArea = useDesignStore((s) => s.showSafeArea);
+  const toggleSafeArea = useDesignStore((s) => s.toggleSafeArea);
 
   const centerBox = () => {
     const w = design.size.widthMm * 0.6;
@@ -161,8 +165,25 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       </button>
 
       <div style={{ flex: 1 }} />
-      <span style={{ alignSelf: "center", color: "var(--cs-text-muted)", fontSize: 12 }}>
-        {design.size.widthMm}×{design.size.heightMm}mm
+
+      <button
+        className={`cs-icon-btn${showSafeArea ? " cs-active" : ""}`}
+        onClick={toggleSafeArea}
+        title="Toggle safe-area guide — nothing critical should sit outside it"
+      >
+        <Ruler size={16} />
+      </button>
+
+      <span
+        style={{ alignSelf: "center", color: "var(--cs-text-muted)", fontSize: 12, cursor: "help" }}
+        title={
+          `Cut (final card): ${fmt(design.size.cutWidthMm)}×${fmt(design.size.cutHeightMm)}mm\n` +
+          `Full bleed (art must extend to here): ${fmt(design.size.widthMm)}×${fmt(design.size.heightMm)}mm\n` +
+          `Safe area (toggle above): ${fmt(design.size.safeWidthMm)}×${fmt(design.size.safeHeightMm)}mm`
+        }
+      >
+        Cut {fmt(design.size.cutWidthMm)}×{fmt(design.size.cutHeightMm)}mm · bleed to {fmt(design.size.widthMm)}×
+        {fmt(design.size.heightMm)}mm
       </span>
       <button className="cs-btn" onClick={handleExport} title={`Export PNG at ${PRINT_DPI} DPI`}>
         <Download size={16} /> Export ({PRINT_DPI} DPI)

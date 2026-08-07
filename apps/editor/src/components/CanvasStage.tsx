@@ -12,12 +12,13 @@ const CLICK_DRAG_THRESHOLD_PX = 3;
 type Guide = { points: number[] };
 type MarqueeRect = { x: number; y: number; width: number; height: number };
 
-/** The card canvas: renders every scene layer, a bleed/trim guide, marquee
- * (rubber-band) multi-select, alignment/snap guides while dragging, and a
- * shared Transformer bound to the current selection. */
+/** The card canvas: renders every scene layer, cut-line and safe-area
+ * guides, marquee (rubber-band) multi-select, alignment/snap guides while
+ * dragging, and a shared Transformer bound to the current selection. */
 export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
+  const showSafeArea = useDesignStore((s) => s.showSafeArea);
   const selectOnly = useDesignStore((s) => s.selectOnly);
   const toggleSelect = useDesignStore((s) => s.toggleSelect);
   const setSelection = useDesignStore((s) => s.setSelection);
@@ -39,7 +40,20 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
 
   const widthPx = mmToStagePx(design.size.widthMm);
   const heightPx = mmToStagePx(design.size.heightMm);
-  const bleedPx = mmToStagePx(design.size.bleedMm);
+
+  // Cut line and safe area are both centered within the full-bleed canvas
+  // (widthPx/heightPx), so each is just an even inset computed from its own
+  // size — see STANDARD_CARD_SIZE_MM for why the safe-area inset differs
+  // between axes (it's asymmetric in the source print spec, not a bug).
+  const cutWidthPx = mmToStagePx(design.size.cutWidthMm);
+  const cutHeightPx = mmToStagePx(design.size.cutHeightMm);
+  const cutInsetXPx = (widthPx - cutWidthPx) / 2;
+  const cutInsetYPx = (heightPx - cutHeightPx) / 2;
+
+  const safeWidthPx = mmToStagePx(design.size.safeWidthMm);
+  const safeHeightPx = mmToStagePx(design.size.safeHeightMm);
+  const safeInsetXPx = (widthPx - safeWidthPx) / 2;
+  const safeInsetYPx = (heightPx - safeHeightPx) / 2;
 
   const attachTransformer = () => {
     const nodes = selectedLayerIds.map((id) => nodeRefs.get(id)).filter((n): n is Konva.Node => !!n);
@@ -273,13 +287,25 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
             />
           ))}
 
-          {design.size.bleedMm > 0 && (
+          {/* Cut line — where the card is actually trimmed. Always shown. */}
+          <Rect
+            x={cutInsetXPx}
+            y={cutInsetYPx}
+            width={cutWidthPx}
+            height={cutHeightPx}
+            stroke="#ef4444"
+            dash={[4, 4]}
+            listening={false}
+          />
+
+          {/* Safe area — recommended inset from the cut line, toggle-able. */}
+          {showSafeArea && (
             <Rect
-              x={bleedPx}
-              y={bleedPx}
-              width={widthPx - bleedPx * 2}
-              height={heightPx - bleedPx * 2}
-              stroke="#ef4444"
+              x={safeInsetXPx}
+              y={safeInsetYPx}
+              width={safeWidthPx}
+              height={safeHeightPx}
+              stroke="#f59e0b"
               dash={[4, 4]}
               listening={false}
             />

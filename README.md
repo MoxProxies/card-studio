@@ -62,14 +62,40 @@ pnpm dev:render      # http://localhost:3001 — render service
 
 **Scene JSON is DPI-independent (millimeters, not pixels).** A `Design`
 is a background color plus an ordered list of `Layer`s (`frame`,
-`image`, `text`, `shape`), each positioned in mm from the card's
-bleed-corner. The editor draws that same JSON on a screen-resolution
-Konva canvas (`EDITOR_DPI = 150`, see `apps/editor/src/geometry.ts`);
-the render service draws the *same* JSON at print resolution. Nothing
-is ever rasterized then scaled up — that's what keeps a 63×88mm card
-crisp at 800 DPI (1984×2772px) for actual print fulfillment, which is
-what this needs to feed. See `packages/scene-schema/src/schema.ts` and
+`image`, `text`, `shape`), each positioned in mm from the full-bleed
+canvas's top-left corner. The editor draws that same JSON on a
+screen-resolution Konva canvas (`EDITOR_DPI = 150`, see
+`apps/editor/src/geometry.ts`); the render service draws the *same*
+JSON at print resolution. Nothing is ever rasterized then scaled up —
+that's what keeps the card crisp at 800 DPI (2176×2960px, the
+full-bleed size) for actual print fulfillment, which is what this needs
+to feed. See `packages/scene-schema/src/schema.ts` and
 `services/render/src/renderDesign.ts`.
+
+**Card size has three nested, centered regions — `CardSize` in
+`packages/scene-schema/src/schema.ts`, standard values in
+`STANDARD_CARD_SIZE_MM` (`units.ts`):**
+- `widthMm`/`heightMm` — the **full-bleed canvas** (69.088×93.98mm).
+  This is what `design.size` sizes the Stage/export to; art and frame
+  layers should extend all the way to this edge, since a printer trims
+  the sheet down from here.
+- `cutWidthMm`/`cutHeightMm` — the **trim/cut size** (62.992×87.884mm),
+  centered within the full-bleed canvas. This is the actual finished
+  card. Drawn as an always-on red dashed guide.
+- `safeWidthMm`/`safeHeightMm` — the **safe area** (57.912×83.058mm),
+  centered within the cut size. Nothing critical (text, important art)
+  should sit outside this, since cutting has some tolerance. Drawn as an
+  orange dashed guide, toggle-able via the ruler icon in the toolbar
+  (`showSafeArea` in the store — a view preference, not part of the
+  design or undo history).
+
+  These numbers come from a real print vendor's 300 DPI spec (bleed
+  816×1110px / cut 744×1038px / safe 684×981px) — the cut and safe
+  margins are each symmetric per axis, but the safe margin differs
+  *between* axes (2.54mm horizontal vs 2.413mm vertical); that's in the
+  source spec, not a bug. Get this wrong and print jobs come back with
+  content cut off or a border of unprinted white — it's worth reading
+  `units.ts`'s comment before changing any of these numbers.
 
 **Frame catalog.** `FrameLayer.assetId` resolves against a small built-in
 catalog of 6 original frame templates (`classic-{white,blue,black,red,

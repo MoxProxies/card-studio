@@ -69,10 +69,18 @@ export type TextLayer = z.infer<typeof TextLayer>;
 export type ShapeLayer = z.infer<typeof ShapeLayer>;
 
 export const CardSize = z.object({
+  /** Full-bleed canvas — art/frame content should extend all the way to
+   * this edge; this is also the exported/printed file's size. */
   widthMm: z.number().positive(),
   heightMm: z.number().positive(),
-  /** Bleed included on every edge; final trim = width/height minus 2x bleed. */
-  bleedMm: z.number().nonnegative().default(0),
+  /** Trim/cut size — the actual card after cutting. Centered within
+   * width/height. */
+  cutWidthMm: z.number().positive(),
+  cutHeightMm: z.number().positive(),
+  /** Recommended safe area — nothing critical should sit outside this.
+   * Centered within cutWidth/cutHeight. */
+  safeWidthMm: z.number().positive(),
+  safeHeightMm: z.number().positive(),
 });
 export type CardSize = z.infer<typeof CardSize>;
 

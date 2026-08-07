@@ -29,6 +29,10 @@ export interface DesignState {
   /** Snapshot captured at the start of an in-progress continuous edit (e.g. typing), pending commitLiveEdit(). */
   pendingSnapshot: Design | null;
   selectedLayerIds: string[];
+  /** View-only UI preference, not part of the design or undo history. */
+  showSafeArea: boolean;
+
+  toggleSafeArea: () => void;
 
   selectOnly: (id: string | null) => void;
   toggleSelect: (id: string) => void;
@@ -63,6 +67,9 @@ export function createDesignStore(initialDesign: Design) {
     future: [],
     pendingSnapshot: null,
     selectedLayerIds: [],
+    showSafeArea: true,
+
+    toggleSafeArea: () => set((state) => ({ showSafeArea: !state.showSafeArea })),
 
     selectOnly: (id) => set({ selectedLayerIds: id ? [id] : [] }),
     toggleSelect: (id) =>

@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { Design, createEmptyDesign, STANDARD_CARD_MM, DEFAULT_BLEED_MM } from "@card-studio/scene-schema";
+import { Design, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/scene-schema";
 import { DesignProvider } from "./store/DesignProvider";
 import { createDesignStore, type DesignStore } from "./store/designStore";
 import { App } from "./App";
@@ -76,7 +76,7 @@ export class CardStudioEditorElement extends HTMLElement {
         console.error("[card-studio] invalid initial-design attribute, starting blank.", err);
       }
     }
-    return createEmptyDesign(crypto.randomUUID(), { ...STANDARD_CARD_MM, bleedMm: DEFAULT_BLEED_MM });
+    return createEmptyDesign(crypto.randomUUID(), STANDARD_CARD_SIZE_MM);
   }
 }
 
