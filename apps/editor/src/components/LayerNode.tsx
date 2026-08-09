@@ -85,17 +85,30 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => onDragEnd(e.target),
   };
 
-  // Text layout (word-wrap + shrink-to-fit + inline {token} symbols) is
-  // computed unconditionally-in-shape (but conditionally in content) so the
+  // Text layout (word-wrap [+ shrink-to-fit for "shrink" mode] + inline
+  // {token} symbols) is computed unconditionally-in-shape (but
+  // conditionally in content) for every text layer, not just "shrink" —
+  // "clip" and "visible" resolve {token}s too now (the render service
+  // already did this for all three modes; see README's "Inline symbols in
+  // text"), they just never search for a smaller font size. "clip" keeps
+  // its pre-existing no-wrap, single-line-per-"\n" behavior (previously
+  // Konva's own wrap="none") by passing an unbounded maxWidthPx — only an
+  // explicit newline starts a new line. This also means the
   // useHtmlImages call below — which must run every render, same as any
   // other hook — always has a real (possibly empty) src list to work from.
   let textLayout: ReturnType<typeof shrinkTextToFit> | null = null;
   let textFontStyle = "normal";
-  if (layer.type === "text" && layer.overflow === "shrink") {
+  if (layer.type === "text") {
     const weight = layer.fontWeight === "bold" ? "bold" : "normal";
     const style = layer.italic ? "italic" : "normal";
     textFontStyle = [style === "italic" ? "italic" : "", weight === "bold" ? "bold" : ""].filter(Boolean).join(" ") || "normal";
     const ctx = getMeasureCtx();
+    // pt -> px at the same DPI the layer's box was converted at (EDITOR_DPI),
+    // not a fixed 96 — otherwise font size and box size scale differently
+    // on screen than they will in the print export. Used as the fixed size
+    // for "clip"/"visible"; "shrink" instead searches maxFontSizePx down to
+    // minFontSizePx below.
+    const nominalFontSizePx = (layer.fontSizePt / 72) * EDITOR_DPI;
     // maxFontSizePt (when set) is the search ceiling, not fontSizePt — lets
     // short content grow into that headroom instead of sitting fixed at
     // fontSizePt. Both are optional, template-defined "boundaries" (see
@@ -105,12 +118,12 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     const minFontSizePx = layer.minFontSizePt !== undefined ? (layer.minFontSizePt / 72) * EDITOR_DPI : undefined;
     textLayout = shrinkTextToFit({
       content: layer.content,
-      startFontSizePx: maxFontSizePx,
-      minFontSizePx,
-      maxWidthPx: mmToStagePx(layer.width),
+      startFontSizePx: layer.overflow === "shrink" ? maxFontSizePx : nominalFontSizePx,
+      minFontSizePx: layer.overflow === "shrink" ? minFontSizePx : undefined,
+      maxWidthPx: layer.overflow === "clip" ? Number.POSITIVE_INFINITY : mmToStagePx(layer.width),
       maxHeightPx: mmToStagePx(layer.height),
       lineHeightRatio: layer.lineHeight,
-      shrink: true,
+      shrink: layer.overflow === "shrink",
       setFontSizePx: (px) => {
         ctx.font = `${style} ${weight} ${px}px ${layer.fontFamily}`;
       },
@@ -171,81 +184,59 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
   }
 
   if (layer.type === "text") {
-    const weight = layer.fontWeight === "bold" ? "bold" : "normal";
-    const style = layer.italic ? "italic" : "normal";
-    const fontStyle = [style === "italic" ? "italic" : "", weight === "bold" ? "bold" : ""].filter(Boolean).join(" ") || "normal";
-    // pt -> px at the same DPI the layer's box was converted at (EDITOR_DPI),
-    // not a fixed 96 — otherwise font size and box size scale differently
-    // on screen and a "fits the box" shrink threshold would trip at the
-    // wrong point relative to what actually prints.
-    const nominalFontSizePx = (layer.fontSizePt / 72) * EDITOR_DPI;
-
-    if (textLayout) {
-      const { fontSizePx, lines } = textLayout;
-      const lineHeightPx = fontSizePx * layer.lineHeight;
-      return (
-        <Group {...common}>
-          {lines.map((line, li) => {
-            const lineY = li * lineHeightPx;
-            const alignOffset =
-              layer.align === "left" ? 0 : layer.align === "right" ? common.width - line.width : (common.width - line.width) / 2;
-            return line.runs.map(({ run, x, width: runWidth }, ri) => {
-              const drawX = alignOffset + x;
-              const key = `${li}-${ri}`;
-              if (run.kind === "text") {
-                return (
-                  <Text
-                    key={key}
-                    x={drawX}
-                    y={lineY}
-                    text={run.text}
-                    fontFamily={layer.fontFamily}
-                    fontSize={fontSizePx}
-                    fontStyle={textFontStyle}
-                    fill={layer.color}
-                    listening={false}
-                  />
-                );
-              }
-              if (isGenericManaToken(run.text)) {
-                return (
-                  <Group key={key} x={drawX} y={lineY} listening={false}>
-                    <Circle radius={runWidth / 2} x={runWidth / 2} y={fontSizePx / 2} fill="#cccccc" />
-                    <Text
-                      text={run.text}
-                      width={runWidth}
-                      height={fontSizePx}
-                      align="center"
-                      verticalAlign="middle"
-                      fontSize={Math.round(runWidth * 0.62)}
-                      fontStyle="bold"
-                      fill="#000000"
-                    />
-                  </Group>
-                );
-              }
-              const url = getSymbolAssetUrl(run.text);
-              const img = url ? symbolImages[url] : undefined;
-              if (!img) return null;
-              return <KonvaImage key={key} x={drawX} y={lineY} width={runWidth} height={fontSizePx} image={img} listening={false} />;
-            });
-          })}
-        </Group>
-      );
-    }
-
+    // textLayout is always populated for text layers now (see above) — every
+    // overflow mode draws through this same run-based path, so {token}
+    // symbols resolve identically in "shrink", "clip", and "visible".
+    const { fontSizePx, lines } = textLayout!;
+    const lineHeightPx = fontSizePx * layer.lineHeight;
     return (
-      <Text
-        {...common}
-        text={layer.content}
-        fontFamily={layer.fontFamily}
-        fontSize={nominalFontSizePx}
-        fontStyle={fontStyle}
-        fill={layer.color}
-        align={layer.align}
-        lineHeight={layer.lineHeight}
-        wrap={layer.overflow === "clip" ? "none" : "word"}
-      />
+      <Group {...common}>
+        {lines.map((line, li) => {
+          const lineY = li * lineHeightPx;
+          const alignOffset =
+            layer.align === "left" ? 0 : layer.align === "right" ? common.width - line.width : (common.width - line.width) / 2;
+          return line.runs.map(({ run, x, width: runWidth }, ri) => {
+            const drawX = alignOffset + x;
+            const key = `${li}-${ri}`;
+            if (run.kind === "text") {
+              return (
+                <Text
+                  key={key}
+                  x={drawX}
+                  y={lineY}
+                  text={run.text}
+                  fontFamily={layer.fontFamily}
+                  fontSize={fontSizePx}
+                  fontStyle={textFontStyle}
+                  fill={layer.color}
+                  listening={false}
+                />
+              );
+            }
+            if (isGenericManaToken(run.text)) {
+              return (
+                <Group key={key} x={drawX} y={lineY} listening={false}>
+                  <Circle radius={runWidth / 2} x={runWidth / 2} y={fontSizePx / 2} fill="#cccccc" />
+                  <Text
+                    text={run.text}
+                    width={runWidth}
+                    height={fontSizePx}
+                    align="center"
+                    verticalAlign="middle"
+                    fontSize={Math.round(runWidth * 0.62)}
+                    fontStyle="bold"
+                    fill="#000000"
+                  />
+                </Group>
+              );
+            }
+            const url = getSymbolAssetUrl(run.text);
+            const img = url ? symbolImages[url] : undefined;
+            if (!img) return null;
+            return <KonvaImage key={key} x={drawX} y={lineY} width={runWidth} height={fontSizePx} image={img} listening={false} />;
+          });
+        })}
+      </Group>
     );
   }
 

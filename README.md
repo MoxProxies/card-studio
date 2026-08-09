@@ -343,14 +343,17 @@ distinct symbol images the current content references via a new
 `useHtmlImages` hook (`useHtmlImage`'s single-src version, generalized to
 a dynamic list, since the set of symbols in play changes with content).
 
-**Known limitation:** this only applies to the `"shrink"` overflow mode.
-A layer set to `"clip"` or `"visible"` still renders `{W}` as literal
-characters in the editor (Konva's native word-wrap, unchanged) — though
-the render service, which already funneled every overflow mode through
-`shrinkTextToFit`, resolves symbols for those too, so exports can
-technically differ from what those two modes show on screen. Worth
-closing if a design actually uses inline symbols outside shrink mode;
-not done yet since rules text — the primary use case — always shrinks.
+Every overflow mode resolves `{token}`s the same way, in both the editor
+and the render service — `"clip"` and `"visible"` route through the same
+run-based `<Group>` of `<Text>`/`<KonvaImage>`/`<Circle>` nodes as
+`"shrink"` in `LayerNode.tsx`, they just skip the shrink search
+(`shrink: false`, fixed at `fontSizePt`) and, for `"visible"`, wrap at
+the box width the same as `"shrink"` does. `"clip"` keeps its
+pre-existing single-line-per-`\n` behavior (no auto word-wrap) by
+passing an unbounded `maxWidthPx` into `shrinkTextToFit` — only an
+explicit newline in the content starts a new line. None of the three
+modes actually clips vertically past the box today (that's a separate,
+still-open gap in `"clip"`, unrelated to symbols).
 
 ## MTG text fields
 
