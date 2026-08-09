@@ -80,6 +80,17 @@ The editor (`apps/editor`) currently supports:
 - A "Scryfall" search fills in all of a real card's text fields, its
   artwork, and its rarity symbol in one click — see [Scryfall
   import](#scryfall-import) below.
+- Text layers support a drop shadow (color/opacity/offset/blur, in the
+  properties panel's "Shadow" section) — applies to the whole rendered
+  layer, glyphs and inline `{token}` symbols alike, not just the
+  characters. Off by default; `shadowColor` being unset is the on/off
+  switch (see `schema.ts`).
+- A bleed-preview toggle (the scissors icon next to the safe-area
+  toggle) masks the bleed margin and rounds the corners to a 2.5mm
+  ("R3") die-cut radius, previewing how the card looks once trimmed.
+  View-only, like the safe-area toggle — doesn't change the design or
+  the print export, which always renders the full rectangular bleed a
+  printer needs to trim from.
 
 ## Layout
 
@@ -628,13 +639,45 @@ to feed. See `packages/scene-schema/src/schema.ts` and
   the sheet down from here.
 - `cutWidthMm`/`cutHeightMm` — the **trim/cut size** (62.992×87.884mm),
   centered within the full-bleed canvas. This is the actual finished
-  card. Drawn as an always-on red dashed guide.
+  card. Drawn as a red dashed guide whenever the bleed itself is showing
+  (see below) — with the bleed hidden, the card's own edge already is
+  the cut line, so the guide would just be a redundant straight overlay
+  on top of a now-rounded edge.
 - `safeWidthMm`/`safeHeightMm` — the **safe area** (57.912×83.058mm),
   centered within the cut size. Nothing critical (text, important art)
   should sit outside this, since cutting has some tolerance. Drawn as an
   orange dashed guide, toggle-able via the ruler icon in the toolbar
   (`showSafeArea` in the store — a view preference, not part of the
-  design or undo history).
+  design or undo history). Independent of the bleed-preview toggle below
+  — still meaningful (and still shown) with the bleed hidden.
+
+**Bleed-preview toggle (the scissors icon, `showBleed` in the store)**
+hides the bleed margin and rounds the corners, so the canvas shows how
+the card looks once trimmed and die-cut instead of a rectangle sitting
+in its own bleed. Implemented in `CanvasStage.tsx`: the background
+`Rect` shrinks from the full bleed box to the cut box and gets a
+`cornerRadius` (Konva `Rect` supports that natively); a `Group`
+wrapping the actual layer content gets a `clipFunc` drawing the same
+rounded rect (`roundedRectPath`, the same moveTo/arcTo/closePath
+technique `generate-placeholder-frames.mjs` uses), since a frame/image
+layer sized to bleed would otherwise still poke out past the rounded
+corners and straight cut edge underneath a merely-shrunk background.
+The radius (`BLEED_MASK_CORNER_RADIUS_MM = 2.5`) is the standard "R3"
+die-cut radius trading-card stock is trimmed to.
+
+This is purely a canvas view preference (default on, i.e. bleed
+showing — same `showSafeArea`-style state, not part of the design or
+undo history) and never touches the design JSON, so it can't affect the
+authoritative print-quality export (`services/render`, which renders
+straight from that JSON and always produces the full sharp-cornered
+bleed box a printer needs to trim from). It can end up baked into the
+toolbar's client-side "Export (800 DPI)" button's PNG if the toggle
+happens to be on when clicked, though — that export is an explicit
+`stage.toDataURL()` snapshot of whatever the Konva canvas currently
+shows (see its own doc comment: "good enough for previews/proofing",
+not the print path), and the cut-line/safe-area guides already have
+this same characteristic today, so it's a consistent, expected quirk of
+that quick-proof button rather than a new one.
 
   These numbers come from a real print vendor's 300 DPI spec (bleed
   816×1110px / cut 744×1038px / safe 684×981px) — the cut and safe
@@ -811,7 +854,8 @@ Not implemented yet, but the shape of it:
   a button in the UI; there's also no way yet for a running deployment
   to pick up a new one without a rebuild/redeploy)
 - Persistence (saving/loading designs — currently all in-memory,
-  including panel widths and the safe-area toggle, which reset on reload)
+  including panel widths and the safe-area/bleed-preview toggles, which
+  reset on reload)
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare
   render endpoint, no auth, no storage of results)

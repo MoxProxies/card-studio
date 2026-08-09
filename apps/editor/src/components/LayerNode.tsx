@@ -98,6 +98,13 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
   // other hook — always has a real (possibly empty) src list to work from.
   let textLayout: ReturnType<typeof shrinkTextToFit> | null = null;
   let textFontStyle = "normal";
+  // Applied to every drawn leaf of a text layer (glyph runs, symbol images,
+  // and the generic-mana circle — but not that circle's own inner digit, to
+  // avoid two overlapping shadows on one small icon) when shadowColor is
+  // set; {} (no shadow props) otherwise. pt -> px at EDITOR_DPI, same
+  // conversion fontSizePt uses, so the shadow's offset/blur read as the
+  // same physical size on screen as in the print export.
+  let textShadowProps: { shadowColor?: string; shadowOffsetX?: number; shadowOffsetY?: number; shadowBlur?: number; shadowOpacity?: number } = {};
   if (layer.type === "text") {
     const weight = layer.fontWeight === "bold" ? "bold" : "normal";
     const style = layer.italic ? "italic" : "normal";
@@ -131,6 +138,16 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
       resolveSymbol: (token) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token),
       symbolWidth: (px) => px,
     });
+    if (layer.shadowColor) {
+      const ptToPxEditor = (pt: number) => (pt / 72) * EDITOR_DPI;
+      textShadowProps = {
+        shadowColor: layer.shadowColor,
+        shadowOffsetX: ptToPxEditor(layer.shadowOffsetXPt),
+        shadowOffsetY: ptToPxEditor(layer.shadowOffsetYPt),
+        shadowBlur: ptToPxEditor(layer.shadowBlurPt),
+        shadowOpacity: layer.shadowOpacity,
+      };
+    }
   }
   const symbolUrls: string[] = [];
   if (textLayout) {
@@ -210,13 +227,14 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
                   fontStyle={textFontStyle}
                   fill={layer.color}
                   listening={false}
+                  {...textShadowProps}
                 />
               );
             }
             if (isGenericManaToken(run.text)) {
               return (
                 <Group key={key} x={drawX} y={lineY} listening={false}>
-                  <Circle radius={runWidth / 2} x={runWidth / 2} y={fontSizePx / 2} fill="#cccccc" />
+                  <Circle radius={runWidth / 2} x={runWidth / 2} y={fontSizePx / 2} fill="#cccccc" {...textShadowProps} />
                   <Text
                     text={run.text}
                     width={runWidth}
@@ -233,7 +251,18 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
             const url = getSymbolAssetUrl(run.text);
             const img = url ? symbolImages[url] : undefined;
             if (!img) return null;
-            return <KonvaImage key={key} x={drawX} y={lineY} width={runWidth} height={fontSizePx} image={img} listening={false} />;
+            return (
+              <KonvaImage
+                key={key}
+                x={drawX}
+                y={lineY}
+                width={runWidth}
+                height={fontSizePx}
+                image={img}
+                listening={false}
+                {...textShadowProps}
+              />
+            );
           });
         })}
       </Group>

@@ -35,6 +35,15 @@ export interface DesignState {
   selectedLayerIds: string[];
   /** View-only UI preference, not part of the design or undo history. */
   showSafeArea: boolean;
+  /** View-only UI preference, not part of the design or undo history. False
+   * masks the bleed margin (rounded to a die-cut-style corner radius) so
+   * the canvas previews how the card looks once trimmed — see
+   * CanvasStage's BLEED_MASK_CORNER_RADIUS_MM. Doesn't affect the print
+   * export (services/render always renders the full bleed box from the
+   * design JSON, never this view flag), only this client-side quick-proof
+   * canvas — same as the cut-line/safe-area guides, which already bake
+   * into that export today. */
+  showBleed: boolean;
   /** Canvas view transform (view-only, not part of the design or undo
    * history). zoom 1 = the editor's native EDITOR_DPI resolution; pan is in
    * screen pixels, applied to the pan/zoom Group, not the Stage itself. */
@@ -43,6 +52,7 @@ export interface DesignState {
   panY: number;
 
   toggleSafeArea: () => void;
+  toggleBleed: () => void;
   /** Sets zoom, optionally keeping a screen-space point (e.g. the cursor)
    * stationary by adjusting pan to compensate. */
   setZoom: (zoom: number, focal?: { x: number; y: number }) => void;
@@ -90,11 +100,13 @@ export function createDesignStore(initialDesign: Design) {
     pendingSnapshot: null,
     selectedLayerIds: [],
     showSafeArea: true,
+    showBleed: true,
     zoom: 1,
     panX: 0,
     panY: 0,
 
     toggleSafeArea: () => set((state) => ({ showSafeArea: !state.showSafeArea })),
+    toggleBleed: () => set((state) => ({ showBleed: !state.showBleed })),
 
     setZoom: (zoom, focal) =>
       set((state) => {

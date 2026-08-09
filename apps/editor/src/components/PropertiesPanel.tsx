@@ -403,6 +403,78 @@ export function PropertiesPanel({ width }: { width: number }) {
               </div>
             </div>
           )}
+          <div style={fieldRowStyle}>
+            <span style={labelStyle}>Shadow</span>
+            <button
+              className={`cs-btn${layer.shadowColor ? " cs-active" : ""}`}
+              style={{ width: "fit-content" }}
+              onClick={() => commitLayerChange(layer.id, { shadowColor: layer.shadowColor ? undefined : "#000000" })}
+            >
+              {layer.shadowColor ? "Remove shadow" : "Add shadow"}
+            </button>
+          </div>
+          {layer.shadowColor && (
+            <>
+              <div style={twoColStyle}>
+                <div style={fieldRowStyle}>
+                  <span style={labelStyle}>Color</span>
+                  <input {...liveColor("shadowColor", layer.shadowColor)} />
+                </div>
+                <div style={fieldRowStyle}>
+                  <span style={labelStyle}>Opacity</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={layer.shadowOpacity}
+                    onFocus={beginLiveEdit}
+                    onChange={(e) => updateLayerLive(layer.id, { shadowOpacity: Number(e.target.value) })}
+                    onMouseUp={commitLiveEdit}
+                  />
+                </div>
+              </div>
+              <div style={twoColStyle}>
+                <div style={fieldRowStyle}>
+                  <span style={labelStyle}>Offset X (pt)</span>
+                  <input
+                    className="cs-input"
+                    type="number"
+                    step={0.5}
+                    value={layer.shadowOffsetXPt}
+                    onFocus={beginLiveEdit}
+                    onChange={(e) => updateLayerLive(layer.id, { shadowOffsetXPt: Number(e.target.value) })}
+                    onBlur={commitLiveEdit}
+                  />
+                </div>
+                <div style={fieldRowStyle}>
+                  <span style={labelStyle}>Offset Y (pt)</span>
+                  <input
+                    className="cs-input"
+                    type="number"
+                    step={0.5}
+                    value={layer.shadowOffsetYPt}
+                    onFocus={beginLiveEdit}
+                    onChange={(e) => updateLayerLive(layer.id, { shadowOffsetYPt: Number(e.target.value) })}
+                    onBlur={commitLiveEdit}
+                  />
+                </div>
+              </div>
+              <div style={fieldRowStyle}>
+                <span style={labelStyle}>Blur (pt)</span>
+                <input
+                  className="cs-input"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={layer.shadowBlurPt}
+                  onFocus={beginLiveEdit}
+                  onChange={(e) => updateLayerLive(layer.id, { shadowBlurPt: Number(e.target.value) })}
+                  onBlur={commitLiveEdit}
+                />
+              </div>
+            </>
+          )}
         </>
       )}
 

@@ -14,6 +14,25 @@ const CLICK_DRAG_THRESHOLD_PX = 3;
 const FIT_MARGIN_PX = 40;
 const WHEEL_ZOOM_SPEED = 0.0015;
 const BUTTON_ZOOM_STEP = 1.2;
+// "R3" die-cut corner radius — the standard rounding trading-card stock is
+// trimmed to. Only used when showBleed is off, to preview how the card
+// looks post-trim; the bleed box itself (and the print export, which reads
+// the design JSON directly rather than this canvas) always stays sharp-
+// cornered, since a printer needs the full rectangular bleed to trim from.
+const BLEED_MASK_CORNER_RADIUS_MM = 2.5;
+
+/** Draws a rounded-rect path on a Konva clipFunc's context (or any
+ * canvas-2D-shaped context) — moveTo/arcTo/closePath rather than the
+ * newer ctx.roundRect, since Konva.Context only proxies the older API. */
+function roundedRectPath(ctx: { moveTo: (x: number, y: number) => void; arcTo: (x1: number, y1: number, x2: number, y2: number, r: number) => void; closePath: () => void }, x: number, y: number, w: number, h: number, r: number) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
 
 type Guide = { points: number[] };
 type MarqueeRect = { x: number; y: number; width: number; height: number };
@@ -35,6 +54,7 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   const design = useDesignStore((s) => s.design);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const showSafeArea = useDesignStore((s) => s.showSafeArea);
+  const showBleed = useDesignStore((s) => s.showBleed);
   const selectOnly = useDesignStore((s) => s.selectOnly);
   const toggleSelect = useDesignStore((s) => s.toggleSelect);
   const setSelection = useDesignStore((s) => s.setSelection);
@@ -125,6 +145,8 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   const safeHeightPx = mmToStagePx(design.size.safeHeightMm);
   const safeInsetXPx = (widthPx - safeWidthPx) / 2;
   const safeInsetYPx = (heightPx - safeHeightPx) / 2;
+
+  const bleedMaskCornerRadiusPx = mmToStagePx(BLEED_MASK_CORNER_RADIUS_MM);
 
   const fitToView = (capAt100: boolean) => {
     if (viewport.width === 0 || viewport.height === 0) return;
@@ -377,12 +399,16 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
           <Group ref={contentGroupRef} x={panX} y={panY} scaleX={zoom} scaleY={zoom}>
             {/* Decorative background — must not intercept pointer events, or every
                 click targets this Rect instead of the Stage and empty-canvas
-                click/marquee handling below never sees e.target === stage. */}
+                click/marquee handling below never sees e.target === stage.
+                Shrinks to the cut box with a die-cut corner radius when
+                showBleed is off, so the card reads as a floating, trimmed
+                card rather than a rectangle sitting in its own bleed. */}
             <Rect
-              x={0}
-              y={0}
-              width={widthPx}
-              height={heightPx}
+              x={showBleed ? 0 : cutInsetXPx}
+              y={showBleed ? 0 : cutInsetYPx}
+              width={showBleed ? widthPx : cutWidthPx}
+              height={showBleed ? heightPx : cutHeightPx}
+              cornerRadius={showBleed ? 0 : bleedMaskCornerRadiusPx}
               fill={design.backgroundColor}
               listening={false}
               shadowColor="black"
@@ -390,36 +416,53 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
               shadowOpacity={0.25}
             />
 
-            {design.layers.map((layer) => (
-              <LayerNode
-                key={layer.id}
-                layer={layer}
-                panModeActive={spaceHeld}
-                onSelect={(e) => {
-                  if (e.evt.shiftKey) toggleSelect(layer.id);
-                  else selectOnly(layer.id);
-                }}
-                registerRef={(node) => {
-                  if (node) nodeRefs.set(layer.id, node);
-                  else nodeRefs.delete(layer.id);
-                  attachTransformer();
-                }}
-                onDragStart={handleLayerDragStart}
-                onDragMove={handleLayerDragMove}
-                onDragEnd={handleLayerDragEnd}
-              />
-            ))}
+            {/* Layer content clips to the same rounded cut box when the bleed
+                is hidden — otherwise art/frame layers sized to bleed (the
+                default, see Toolbar's addFrame/addImage) would still poke
+                out past the rounded corners and the straight cut edge. */}
+            <Group
+              clipFunc={
+                showBleed
+                  ? undefined
+                  : (ctx) => roundedRectPath(ctx, cutInsetXPx, cutInsetYPx, cutWidthPx, cutHeightPx, bleedMaskCornerRadiusPx)
+              }
+            >
+              {design.layers.map((layer) => (
+                <LayerNode
+                  key={layer.id}
+                  layer={layer}
+                  panModeActive={spaceHeld}
+                  onSelect={(e) => {
+                    if (e.evt.shiftKey) toggleSelect(layer.id);
+                    else selectOnly(layer.id);
+                  }}
+                  registerRef={(node) => {
+                    if (node) nodeRefs.set(layer.id, node);
+                    else nodeRefs.delete(layer.id);
+                    attachTransformer();
+                  }}
+                  onDragStart={handleLayerDragStart}
+                  onDragMove={handleLayerDragMove}
+                  onDragEnd={handleLayerDragEnd}
+                />
+              ))}
+            </Group>
 
-            {/* Cut line — where the card is actually trimmed. Always shown. */}
-            <Rect
-              x={cutInsetXPx}
-              y={cutInsetYPx}
-              width={cutWidthPx}
-              height={cutHeightPx}
-              stroke="#ef4444"
-              dash={[4, 4]}
-              listening={false}
-            />
+            {/* Cut line — where the card is actually trimmed. Only meaningful
+                (and only drawn) when the bleed itself is visible; with the
+                bleed hidden the card's own solid, rounded edge already is
+                the cut line. */}
+            {showBleed && (
+              <Rect
+                x={cutInsetXPx}
+                y={cutInsetYPx}
+                width={cutWidthPx}
+                height={cutHeightPx}
+                stroke="#ef4444"
+                dash={[4, 4]}
+                listening={false}
+              />
+            )}
 
             {/* Safe area — recommended inset from the cut line, toggle-able. */}
             {showSafeArea && (

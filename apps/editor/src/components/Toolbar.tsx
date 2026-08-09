@@ -2,7 +2,7 @@ import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import type { Layer } from "@card-studio/scene-schema";
-import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search } from "lucide-react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Scissors } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
@@ -56,6 +56,8 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const canRedo = useDesignStore((s) => s.future.length > 0);
   const showSafeArea = useDesignStore((s) => s.showSafeArea);
   const toggleSafeArea = useDesignStore((s) => s.toggleSafeArea);
+  const showBleed = useDesignStore((s) => s.showBleed);
+  const toggleBleed = useDesignStore((s) => s.toggleBleed);
   const zoom = useDesignStore((s) => s.zoom);
   const panX = useDesignStore((s) => s.panX);
   const panY = useDesignStore((s) => s.panY);
@@ -108,6 +110,10 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       align: "left",
       lineHeight: 1.2,
       overflow: "shrink",
+      shadowOffsetXPt: 1,
+      shadowOffsetYPt: 1,
+      shadowBlurPt: 0,
+      shadowOpacity: 0.6,
       rotationDeg: 0,
       opacity: 1,
       visible: true,
@@ -145,6 +151,10 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     align: template.align,
     lineHeight: 1.15,
     overflow: "shrink",
+    shadowOffsetXPt: 1,
+    shadowOffsetYPt: 1,
+    shadowBlurPt: 0,
+    shadowOpacity: 0.6,
     rotationDeg: 0,
     opacity: 1,
     visible: true,
@@ -427,6 +437,13 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
         title="Toggle safe-area guide — nothing critical should sit outside it"
       >
         <Ruler size={16} />
+      </button>
+      <button
+        className={`cs-icon-btn${!showBleed ? " cs-active" : ""}`}
+        onClick={toggleBleed}
+        title={showBleed ? "Preview trimmed card — hides the bleed margin and rounds the corners" : "Show full bleed"}
+      >
+        <Scissors size={16} />
       </button>
 
       <span

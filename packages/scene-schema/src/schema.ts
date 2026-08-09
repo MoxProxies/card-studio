@@ -71,6 +71,19 @@ export const TextLayer = LayerBase.extend({
   /** 'shrink' auto-fits fontSizePt (or the minFontSizePt..maxFontSizePt
    * range, if set) to the box; 'clip' truncates overflow. */
   overflow: z.enum(["shrink", "clip", "visible"]).default("shrink"),
+  /** Presence of shadowColor is the on/off switch — undefined means no
+   * shadow at all (the common case), so a layer with no shadow doesn't
+   * carry four extra zero-valued fields. The offset/blur are in pt, same
+   * physical unit as fontSizePt, so the shadow scales identically between
+   * the editor's preview DPI and the render service's print DPI. Applies
+   * to the whole rendered text layer, including inline {token} symbols —
+   * not just the glyphs — for a consistent look on tokens embedded
+   * mid-paragraph (see "Inline symbols in text" in the README). */
+  shadowColor: z.string().optional(),
+  shadowOffsetXPt: z.number().default(1),
+  shadowOffsetYPt: z.number().default(1),
+  shadowBlurPt: z.number().min(0).default(0),
+  shadowOpacity: z.number().min(0).max(1).default(0.6),
 });
 
 export const ShapeLayer = LayerBase.extend({

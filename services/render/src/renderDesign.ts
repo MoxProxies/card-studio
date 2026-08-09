@@ -107,6 +107,22 @@ function drawShape(
   }
 }
 
+/** Bakes an opacity into a #rgb/#rrggbb color as an rgba(...) string, for
+ * contexts (like Canvas2D's shadowColor) that have no separate opacity
+ * knob of their own. Any other color syntax (already rgba(...), a named
+ * color, ...) is returned unchanged — the color picker in the editor only
+ * ever produces #rrggbb, so that's the one format worth converting. */
+function hexToRgba(color: string, alpha: number): string {
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (!match) return color;
+  const hex = match[1]!;
+  const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function roundedRect(ctx: SKRSContext2D, x: number, y: number, w: number, h: number, r: number) {
   const radius = Math.min(r, w / 2, h / 2);
   ctx.moveTo(x + radius, y);
@@ -197,6 +213,19 @@ async function drawText(
   // instead of via ctx.textAlign.
   ctx.textAlign = "left";
 
+  // Canvas2D has no shadowOpacity — bake layer.shadowOpacity into the alpha
+  // channel of shadowColor instead (see hexToRgba). Set once for the whole
+  // layer (applies to every fillText/drawImage call below, glyphs and
+  // symbols alike, matching the editor's per-node shadow props) and left
+  // active on return — drawLayer's ctx.save()/ctx.restore() around each
+  // layer is what actually resets it before the next one draws.
+  if (layer.shadowColor) {
+    ctx.shadowColor = hexToRgba(layer.shadowColor, layer.shadowOpacity);
+    ctx.shadowOffsetX = ptToPx(layer.shadowOffsetXPt);
+    ctx.shadowOffsetY = ptToPx(layer.shadowOffsetYPt);
+    ctx.shadowBlur = ptToPx(layer.shadowBlurPt);
+  }
+
   const lineHeightPx = fontSizePx * layer.lineHeight;
 
   lines.forEach((line, i) => {
@@ -228,6 +257,12 @@ function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y:
   ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
   ctx.fillStyle = "#cccccc";
   ctx.fill();
+  // The circle above already carries the layer's text shadow (inherited
+  // from drawText's ctx.shadow* — this function only ctx.save()s, it
+  // doesn't clear them); drawing the digit with the same shadow active
+  // would cast a second, overlapping shadow from a shape that's already
+  // inside the circle's own shadow silhouette.
+  ctx.shadowColor = "transparent";
   ctx.fillStyle = "#000000";
   ctx.font = `bold ${Math.round(size * 0.62)}px sans-serif`;
   ctx.textAlign = "center";
