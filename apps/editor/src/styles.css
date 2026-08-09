@@ -1,20 +1,49 @@
 /* .cs-root, not :root — this stylesheet gets injected into a shadow root
  * when embedded (see embed.ts), and :root only ever matches the top-level
  * document's <html>, never a shadow tree's boundary. A class selector works
- * identically in both the standalone document and inside a shadow root. */
+ * identically in both the standalone document and inside a shadow root.
+ *
+ * Palette is warm/parchment-and-ink — evocative of a card frame and rules
+ * text box rather than a generic gray SaaS tool — built around a bronze/gold
+ * accent (the color classic MTG gold frames use) instead of a cool blue or
+ * indigo. --cs-surface-soft is a step deeper than --cs-surface, for
+ * thumbnails/placeholders that need to read as a shallow inset rather than
+ * flush with the page. --cs-shadow/--cs-backdrop replace flat black
+ * drop-shadows with the same warm ink tone the text color is built from, so
+ * elevation reads as "shadow," not a mismatched cool gray dropped onto a
+ * warm page. */
 .cs-root {
-  --cs-border: #e5e7eb;
-  --cs-border-strong: #d1d5db;
-  --cs-text: #111827;
-  --cs-text-muted: #6b7280;
-  --cs-accent: #6366f1;
-  --cs-accent-soft: #eef2ff;
-  --cs-surface: #ffffff;
-  --cs-danger: #ef4444;
+  --cs-border: #e3d5b0;
+  --cs-border-strong: #cbb37e;
+  --cs-text: #2a2013;
+  --cs-text-muted: #8c7a58;
+  --cs-accent: #935e13;
+  --cs-accent-soft: #f6ecd2;
+  --cs-surface: #fffdf7;
+  --cs-surface-soft: #f1e6c8;
+  --cs-danger: #9c3a2c;
+  --cs-danger-soft: #f6ded8;
+  --cs-shadow: rgba(58, 38, 15, 0.28);
+  --cs-backdrop: rgba(43, 28, 10, 0.5);
+  --cs-font-heading: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
 .cs-root, .cs-root * {
   box-sizing: border-box;
+}
+
+/* Toolbar/side-panel chrome defaults to the warm surface color — the few
+ * elements that need something else (the canvas viewport, modal backdrops)
+ * set their own inline background, which wins over this. */
+.cs-root {
+  background: var(--cs-surface);
+  color: var(--cs-text);
+}
+
+.cs-heading {
+  font-family: var(--cs-font-heading);
+  color: var(--cs-text);
+  letter-spacing: 0.01em;
 }
 
 .cs-btn {
@@ -32,7 +61,7 @@
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .cs-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--cs-surface-soft);
 }
 .cs-btn:disabled {
   opacity: 0.4;
@@ -54,12 +83,12 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: #4b5563;
+  color: var(--cs-text-muted);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
 .cs-icon-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--cs-surface-soft);
   color: var(--cs-text);
 }
 .cs-icon-btn.cs-active {
@@ -98,7 +127,7 @@
 }
 .cs-input:disabled {
   color: var(--cs-text-muted);
-  background: #f9fafb;
+  background: var(--cs-surface-soft);
 }
 
 .cs-swatch {
@@ -107,7 +136,7 @@
   padding: 0;
   cursor: pointer;
   overflow: hidden;
-  background: #f3f4f6;
+  background: var(--cs-surface-soft);
   transition: border-color 120ms ease;
 }
 .cs-swatch:hover {

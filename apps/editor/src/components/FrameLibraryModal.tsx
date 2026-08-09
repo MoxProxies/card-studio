@@ -40,7 +40,7 @@ export function FrameLibraryModal({ onSelect, onClose }: FrameLibraryModalProps)
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.4)",
+        background: "var(--cs-backdrop)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -55,11 +55,11 @@ export function FrameLibraryModal({ onSelect, onClose }: FrameLibraryModalProps)
           maxHeight: "84vh",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+          boxShadow: "0 20px 50px var(--cs-shadow)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--cs-border)" }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0, flex: 1 }}>Frame library</h2>
+          <h2 className="cs-heading" style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>Frame library</h2>
           <button className="cs-icon-btn" onClick={onClose} title="Close">
             <X size={16} />
           </button>
@@ -100,7 +100,7 @@ export function FrameLibraryModal({ onSelect, onClose }: FrameLibraryModalProps)
                   title={`${asset.categoryLabel} / ${asset.name}`}
                   style={{ display: "flex", flexDirection: "column", gap: 4, padding: 6 }}
                 >
-                  <div style={{ aspectRatio: "63 / 88", overflow: "hidden", borderRadius: 4, background: "#f3f4f6" }}>
+                  <div style={{ aspectRatio: "63 / 88", overflow: "hidden", borderRadius: 4, background: "var(--cs-surface-soft)" }}>
                     <img
                       src={`/frames/${asset.category}/${asset.fileName}`}
                       alt={asset.name}

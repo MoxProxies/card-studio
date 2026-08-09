@@ -50,7 +50,7 @@ export function TextTemplateMenu({ templates, onAdd, onAddAll }: TextTemplateMen
             background: "var(--cs-surface)",
             border: "1px solid var(--cs-border)",
             borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+            boxShadow: "0 8px 24px var(--cs-shadow)",
             minWidth: 190,
             zIndex: 1000,
             padding: 4,

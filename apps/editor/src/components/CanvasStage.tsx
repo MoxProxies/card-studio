@@ -362,7 +362,7 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
     <div
       ref={containerRef}
       className="cs-root"
-      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#e5e7eb", cursor }}
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#e3d9c0", cursor }}
     >
       <Stage
         ref={stageRef}
@@ -456,7 +456,7 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
         </KonvaLayer>
       </Stage>
 
-      <div style={{ position: "absolute", right: 12, bottom: 12, display: "flex", gap: 4, background: "var(--cs-surface)", border: "1px solid var(--cs-border)", borderRadius: 8, padding: 4, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
+      <div style={{ position: "absolute", right: 12, bottom: 12, display: "flex", gap: 4, background: "var(--cs-surface)", border: "1px solid var(--cs-border)", borderRadius: 8, padding: 4, boxShadow: "0 2px 8px rgba(58,38,15,0.18)" }}>
         <button className="cs-icon-btn" title="Zoom out" onClick={() => setZoom(zoom / BUTTON_ZOOM_STEP, zoomFocal())}>
           <ZoomOut size={16} />
         </button>

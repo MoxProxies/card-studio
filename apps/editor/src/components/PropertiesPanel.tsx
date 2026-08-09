@@ -35,7 +35,7 @@ const getPanelStyle = (width: number): CSSProperties => ({
   overflowX: "hidden",
   fontSize: 13,
 });
-const headingStyle: CSSProperties = { fontSize: 13, fontWeight: 600, margin: "0 0 10px" };
+const headingStyle: CSSProperties = { fontSize: 14, fontWeight: 600, margin: "0 0 10px" };
 const fieldRowStyle: CSSProperties = { display: "flex", flexDirection: "column", gap: 3, marginBottom: 8, minWidth: 0 };
 const twoColStyle: CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, minWidth: 0 };
 const labelStyle: CSSProperties = { color: "var(--cs-text-muted)", fontSize: 11 };
@@ -79,7 +79,7 @@ export function PropertiesPanel({ width }: { width: number }) {
   if (selectedLayers.length > 1) {
     return (
       <div className="cs-root" style={getPanelStyle(width)} data-testid="properties-panel">
-        <h3 style={headingStyle} data-testid="multi-select-heading">{selectedLayers.length} layers selected</h3>
+        <h3 className="cs-heading" style={headingStyle} data-testid="multi-select-heading">{selectedLayers.length} layers selected</h3>
         <div style={fieldRowStyle}>
           <span style={labelStyle}>Align to card</span>
           <div style={{ display: "flex", gap: 4 }}>
@@ -143,7 +143,7 @@ export function PropertiesPanel({ width }: { width: number }) {
 
   return (
     <div className="cs-root" style={getPanelStyle(width)} data-testid="properties-panel">
-      <h3 style={headingStyle}>{layer.name}</h3>
+      <h3 className="cs-heading" style={headingStyle}>{layer.name}</h3>
 
       <div style={fieldRowStyle}>
         <span style={labelStyle}>Name</span>
@@ -210,7 +210,7 @@ export function PropertiesPanel({ width }: { width: number }) {
           <div style={fieldRowStyle}>
             <span style={labelStyle}>Frame</span>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 44, aspectRatio: "63 / 88", borderRadius: 6, overflow: "hidden", background: "#f3f4f6", flex: "none" }}>
+              <div style={{ width: 44, aspectRatio: "63 / 88", borderRadius: 6, overflow: "hidden", background: "var(--cs-surface-soft)", flex: "none" }}>
                 {(() => {
                   const asset = getFrameAsset(layer.assetId);
                   return asset ? (

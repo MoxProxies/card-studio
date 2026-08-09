@@ -23,7 +23,7 @@ export function LayerPanel({ width }: { width: number }) {
       className="cs-root"
       style={{ width, flex: "none", minWidth: 0, borderLeft: "1px solid var(--cs-border)", padding: 8, overflowY: "auto", overflowX: "hidden" }}
     >
-      <h3 style={{ fontSize: 13, fontWeight: 600, margin: "4px 0 8px" }}>Layers</h3>
+      <h3 className="cs-heading" style={{ fontSize: 14, fontWeight: 600, margin: "4px 0 8px" }}>Layers</h3>
       {[...layers].reverse().map((layer) => {
         const isSelected = selectedLayerIds.includes(layer.id);
         const TypeIcon = TYPE_ICONS[layer.type];

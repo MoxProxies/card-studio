@@ -70,7 +70,7 @@ export function ScryfallSearchModal({ onSelect, onClose }: ScryfallSearchModalPr
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.4)",
+        background: "var(--cs-backdrop)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -85,11 +85,11 @@ export function ScryfallSearchModal({ onSelect, onClose }: ScryfallSearchModalPr
           maxHeight: "70vh",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+          boxShadow: "0 20px 50px var(--cs-shadow)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--cs-border)" }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0, flex: 1 }}>Import from Scryfall</h2>
+          <h2 className="cs-heading" style={{ fontSize: 16, fontWeight: 600, margin: 0, flex: 1 }}>Import from Scryfall</h2>
           <button className="cs-icon-btn" onClick={onClose} title="Close">
             <X size={16} />
           </button>
@@ -111,7 +111,7 @@ export function ScryfallSearchModal({ onSelect, onClose }: ScryfallSearchModalPr
 
         <div style={{ padding: 8, overflowY: "auto", flex: 1 }}>
           {error && (
-            <p style={{ color: "#b91c1c", fontSize: 13, padding: "6px 8px" }}>{error}</p>
+            <p style={{ color: "var(--cs-danger)", fontSize: 13, padding: "6px 8px" }}>{error}</p>
           )}
           {!error && query.trim() && suggestions.length === 0 && (
             <p style={{ color: "var(--cs-text-muted)", fontSize: 13, padding: "6px 8px" }}>No matches yet…</p>
