@@ -31,8 +31,9 @@ export function getSymbolAssetPath(token: string): string | undefined {
   return asset ? path.join(__dirname, "../assets/symbols", asset.fileName) : undefined;
 }
 
-/** A generic mana token — {0}, {1}, {2}, ... any non-negative integer —
- * renders as a drawn circle + digits instead of a library asset. */
+/** A generic mana token — {0}, {1}, {2}, ... any non-negative integer, or
+ * a variable cost ({X}, {Y}, {Z}) — renders as a drawn circle + the
+ * digits/letter instead of a library asset. */
 export function isGenericManaToken(token: string): boolean {
-  return /^\d+$/.test(token.trim());
+  return /^(\d+|[XYZ])$/i.test(token.trim());
 }

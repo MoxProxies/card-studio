@@ -28,9 +28,10 @@ export function getSymbolAssetUrl(token: string): string | undefined {
   return asset ? `/symbols/${asset.fileName}` : undefined;
 }
 
-/** A generic mana token — {0}, {1}, {2}, ... any non-negative integer —
- * renders as a drawn circle + digits instead of a library asset, so
- * arbitrary numbers don't need one SVG file per value. */
+/** A generic mana token — {0}, {1}, {2}, ... any non-negative integer, or
+ * a variable cost ({X}, {Y}, {Z}) — renders as a drawn circle + the
+ * digits/letter instead of a library asset, so arbitrary numbers (and the
+ * handful of variable-cost letters) don't need one SVG file per value. */
 export function isGenericManaToken(token: string): boolean {
-  return /^\d+$/.test(token.trim());
+  return /^(\d+|[XYZ])$/i.test(token.trim());
 }

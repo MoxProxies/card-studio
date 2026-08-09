@@ -287,20 +287,37 @@ building on it would've been a gamble.
    both.
 3. Commit everything sync touched.
 
-The shipped set is deliberately small — `w`, `u`, `b`, `r`, `g`, `c`
-(colorless), `t` (tap), `q` (untap) — original, generic circle+letter art
-(not a reproduction of WotC's actual symbols, same reasoning as the
-frame art), enough to prove the mechanism rather than front-load every
-mana symbol, hybrid combination, and Phyrexian variant that exists. Add
-more the same way, any time.
+The shipped set covers the mana/ability symbols that actually show up in
+real oracle text — original, generic circle art (not a reproduction of
+WotC's actual symbols, same reasoning as the frame art), not the exact
+look of any specific card game:
+
+- The five colors plus colorless: `w`, `u`, `b`, `r`, `g`, `c`
+- Tap/untap: `t`, `q`
+- All ten two-color hybrids (`w-u`, `u-b`, `b-r`, `r-g`, `g-w`, `w-b`,
+  `u-r`, `b-g`, `r-w`, `g-u`) and the five 2-generic hybrids (`2-w`,
+  `2-u`, `2-b`, `2-r`, `2-g`) — a circle split down the middle, one half
+  per option, each half labeled like the mono-color symbols are
+- The five Phyrexian variants (`w-p`, `u-p`, `b-p`, `r-p`, `g-p`) — same
+  half-circle split, with the "pay life instead" half rendered as a
+  black circle with a white `P` rather than a second color
+- Snow (`s`) and energy (`e`)
+
+Add more the same way, any time — nothing about the mechanism is
+specific to this set.
 
 **Generic mana numbers (`{0}`, `{1}`, `{2}`, ... any non-negative
-integer) don't need a symbol-library file at all** — `isGenericManaToken`
-(`symbolAssets.ts`) recognizes pure-digit tokens and a shared routine
-draws a light-grey circle with the digits centered on top at draw time,
-in both the editor (`drawGenericManaSymbol`-equivalent Konva nodes) and
-the render service (`drawGenericManaSymbol` in `renderDesign.ts`) —
-covers arbitrary generic costs without one asset per number.
+integer) and variable costs (`{X}`, `{Y}`, `{Z}`) don't need a
+symbol-library file at all** — `isGenericManaToken` (`symbolAssets.ts`)
+recognizes pure-digit tokens and the three variable-cost letters, and a
+shared routine draws a light-grey circle with the digit/letter centered
+on top at draw time, in both the editor (`drawGenericManaSymbol`-
+equivalent Konva nodes) and the render service (`drawGenericManaSymbol`
+in `renderDesign.ts`) — covers arbitrary generic costs without one asset
+per number. A real symbol-library asset always wins over this fallback
+when both could apply (checked first) — relevant for something like
+`{2/W}`, which is a real two-half asset (`2-w.svg`), not the generic
+circle a bare `{2}` gets.
 
 **How it's implemented, for anyone touching this code:**
 `shrinkTextToFit` (`packages/scene-schema/src/textFit.ts`) — the same
@@ -798,6 +815,3 @@ Not implemented yet, but the shape of it:
 - Deploy config for either app
 - Inline symbols outside `overflow: "shrink"` (see [Inline symbols in
   text](#inline-symbols-in-text)'s known limitation)
-- A wider symbol-library set (hybrid, Phyrexian, snow, energy, and the
-  rest of the mana/ability symbols beyond the initial w/u/b/r/g/c/t/q —
-  see [Inline symbols in text](#inline-symbols-in-text))

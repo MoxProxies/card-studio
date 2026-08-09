@@ -1,5 +1,45 @@
 [
   {
+    "id": "2-b",
+    "label": "2 B",
+    "fileName": "2-b.svg"
+  },
+  {
+    "id": "2-g",
+    "label": "2 G",
+    "fileName": "2-g.svg"
+  },
+  {
+    "id": "2-r",
+    "label": "2 R",
+    "fileName": "2-r.svg"
+  },
+  {
+    "id": "2-u",
+    "label": "2 U",
+    "fileName": "2-u.svg"
+  },
+  {
+    "id": "2-w",
+    "label": "2 W",
+    "fileName": "2-w.svg"
+  },
+  {
+    "id": "b-g",
+    "label": "B G",
+    "fileName": "b-g.svg"
+  },
+  {
+    "id": "b-p",
+    "label": "B P",
+    "fileName": "b-p.svg"
+  },
+  {
+    "id": "b-r",
+    "label": "B R",
+    "fileName": "b-r.svg"
+  },
+  {
     "id": "b",
     "label": "B",
     "fileName": "b.svg"
@@ -8,6 +48,26 @@
     "id": "c",
     "label": "C",
     "fileName": "c.svg"
+  },
+  {
+    "id": "e",
+    "label": "E",
+    "fileName": "e.svg"
+  },
+  {
+    "id": "g-p",
+    "label": "G P",
+    "fileName": "g-p.svg"
+  },
+  {
+    "id": "g-u",
+    "label": "G U",
+    "fileName": "g-u.svg"
+  },
+  {
+    "id": "g-w",
+    "label": "G W",
+    "fileName": "g-w.svg"
   },
   {
     "id": "g",
@@ -20,9 +80,29 @@
     "fileName": "q.svg"
   },
   {
+    "id": "r-g",
+    "label": "R G",
+    "fileName": "r-g.svg"
+  },
+  {
+    "id": "r-p",
+    "label": "R P",
+    "fileName": "r-p.svg"
+  },
+  {
+    "id": "r-w",
+    "label": "R W",
+    "fileName": "r-w.svg"
+  },
+  {
     "id": "r",
     "label": "R",
     "fileName": "r.svg"
+  },
+  {
+    "id": "s",
+    "label": "S",
+    "fileName": "s.svg"
   },
   {
     "id": "t",
@@ -30,9 +110,39 @@
     "fileName": "t.svg"
   },
   {
+    "id": "u-b",
+    "label": "U B",
+    "fileName": "u-b.svg"
+  },
+  {
+    "id": "u-p",
+    "label": "U P",
+    "fileName": "u-p.svg"
+  },
+  {
+    "id": "u-r",
+    "label": "U R",
+    "fileName": "u-r.svg"
+  },
+  {
     "id": "u",
     "label": "U",
     "fileName": "u.svg"
+  },
+  {
+    "id": "w-b",
+    "label": "W B",
+    "fileName": "w-b.svg"
+  },
+  {
+    "id": "w-p",
+    "label": "W P",
+    "fileName": "w-p.svg"
+  },
+  {
+    "id": "w-u",
+    "label": "W U",
+    "fileName": "w-u.svg"
   },
   {
     "id": "w",
