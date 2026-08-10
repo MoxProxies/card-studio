@@ -132,10 +132,18 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     align: template.align,
     lineHeight: 1.15,
     overflow: "shrink",
-    shadowOffsetXPt: 0,
-    shadowOffsetYPt: 0,
-    shadowBlurPt: 1,
-    shadowOpacity: 0.75,
+    // Whether this field has a shadow at all — and, if so, its exact
+    // look — is decided by the template, same as its color/font/size: a
+    // title over busy full-art might want one, rules text over its own
+    // parchment-colored box usually doesn't. template.shadow's presence
+    // (and its color specifically) is the on/off switch; the rest each
+    // independently fall back to schema.ts's TextLayer defaults so a
+    // template only has to name a color to get sensible sizing for free.
+    shadowColor: template.shadow?.color,
+    shadowOffsetXPt: template.shadow?.offsetXPt ?? 0,
+    shadowOffsetYPt: template.shadow?.offsetYPt ?? 0,
+    shadowBlurPt: template.shadow?.blurPt ?? 1,
+    shadowOpacity: template.shadow?.opacity ?? 0.75,
     rotationDeg: 0,
     opacity: 1,
     visible: true,

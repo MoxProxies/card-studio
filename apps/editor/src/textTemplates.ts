@@ -30,6 +30,21 @@ export interface TextFieldTemplate {
    * that's actually in the font catalog (or a system font), same caveat
    * as DEFAULT_FONT_FAMILY itself. Omit to just use the default. */
   fontFamily?: string;
+  /** Optional drop shadow this field starts with — omit entirely for no
+   * shadow (the common case; most rules-text-shaped fields read worse
+   * with one), or set at least `color` for fields that benefit from one
+   * (e.g. a title sitting over busy full-art). `color`'s presence is the
+   * on/off switch, same convention as TextLayer.shadowColor itself;
+   * offsetXPt/offsetYPt/blurPt/opacity each independently fall back to
+   * schema.ts's TextLayer defaults (0/0/1pt/0.75) when omitted, so a
+   * template can set just a color and get sensible sizing for free. */
+  shadow?: {
+    color: string;
+    offsetXPt?: number;
+    offsetYPt?: number;
+    blurPt?: number;
+    opacity?: number;
+  };
 }
 
 interface TextTemplateCatalog {

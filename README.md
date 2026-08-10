@@ -401,6 +401,18 @@ same "must actually be in the font catalog, or a system font" caveat as
 `DEFAULT_FONT_FAMILY` itself applies. Omit it to just use the default;
 none of the shipped fields set it.
 
+An optional `shadow` on a field is that field's starting drop shadow —
+whether it has one at all, and its exact look, is a per-field/per-frame
+decision the same way font/size/color are, not a global setting. Shape:
+`{ "color": "#...", "offsetXPt"?, "offsetYPt"?, "blurPt"?, "opacity"? }`
+— `color`'s presence is the on/off switch (mirrors `TextLayer.shadowColor`
+itself), the other four each independently fall back to `schema.ts`'s
+`TextLayer` defaults (0/0/1pt/0.75) when omitted, so a field can just
+name a color and inherit sensible sizing. None of the shipped fields set
+it (most MTG text — rules, flavor, title over a normal frame — reads
+worse with a shadow than without one); it's there for frames where it
+helps, e.g. a title sitting directly over busy full-art.
+
 **`minFontSizePt`/`maxFontSizePt` let short content grow to fill the
 box, not just shrink when it overflows.** Every shipped field sets both
 — e.g. `rules` is `fontSizePt: 8` with `minFontSizePt: 5` /
