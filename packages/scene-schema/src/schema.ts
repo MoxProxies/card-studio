@@ -17,7 +17,30 @@ const LayerBase = z.object({
   rotationDeg: z.number().default(0),
   opacity: z.number().min(0).max(1).default(1),
   visible: z.boolean().default(true),
+  /** Position/size/rotation lock — when true, the layer can't be dragged,
+   * resized, or rotated via the canvas Transformer, nor moved by arrow-key
+   * nudge or by typing into the properties panel's X/Y/Width/Height/
+   * Rotation fields (CanvasStage.tsx's attachTransformer, LayerNode.tsx's
+   * `draggable`, designStore.ts's nudgeLayers, and PropertiesPanel.tsx's
+   * liveNumber all check it). Not gated by any user entitlement — anyone
+   * can toggle it via the lock icon in the layer/properties panel,
+   * regardless of contentLocked below or the current user's entitlements.
+   * A text-field template can default a field to locked (see
+   * TextFieldTemplate.locked in textTemplates.ts) for things like a
+   * signature or an official symbol that shouldn't move by accident. */
   locked: z.boolean().default(false),
+  /** *Content* lock — separate from `locked` above, which only gates
+   * position/transform. When true, editing this layer's content (a
+   * TextLayer's text; the rarity dropdown, for the one designated
+   * rarity-symbol layer) additionally requires the
+   * Entitlements.canEditLockedContent the embedding host grants (see
+   * apps/editor/src/entitlements.ts) — the "premium" gate. A layer can be
+   * `locked` (immovable) and *not* `contentLocked` (freely editable
+   * text), or the other way around, or both, or neither — the two are
+   * independent. Doesn't affect services/render at all; rendering only
+   * cares what a field currently contains, not who was allowed to put it
+   * there. */
+  contentLocked: z.boolean().default(false),
   /** Id of a Design.groups entry this layer belongs to, if any — purely an
    * organizational label for the layer panel (bulk select/hide/lock/move,
    * a shared header), not a transform hierarchy: z-order is still just

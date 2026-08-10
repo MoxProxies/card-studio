@@ -112,6 +112,22 @@
     "maxFontSizePt": 13
   },
   {
+    "id": "edition",
+    "label": "Edition",
+    "defaultContent": "(Edition)",
+    "x": 2.5,
+    "y": 78.6,
+    "width": 40,
+    "height": 4.4,
+    "fontSizePt": 6,
+    "fontWeight": "normal",
+    "align": "left",
+    "color": "#111111",
+    "isItalic": false,
+    "minFontSizePt": 4,
+    "maxFontSizePt": 7
+  },
+  {
     "id": "artist",
     "label": "Artist/Credit",
     "defaultContent": "Illus. Artist Name",
@@ -125,7 +141,9 @@
     "color": "#111111",
     "isItalic": false,
     "minFontSizePt": 4,
-    "maxFontSizePt": 7
+    "maxFontSizePt": 7,
+    "locked": true,
+    "contentLocked": true
   },
   {
     "id": "signature",
@@ -141,6 +159,8 @@
     "color": "#111111",
     "isItalic": false,
     "minFontSizePt": 4,
-    "maxFontSizePt": 7
+    "maxFontSizePt": 7,
+    "locked": true,
+    "contentLocked": true
   }
 ]

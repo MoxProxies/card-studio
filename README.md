@@ -403,7 +403,7 @@ text-template-library/
 ```
 
 Each file is a JSON array of the standard fields (title, nickname, mana
-cost, typeline, rules, flavor, power/toughness, artist/credit,
+cost, typeline, rules, flavor, power/toughness, edition, artist/credit,
 signature) — each
 field's `x`/`y`/`width`/`height` (mm, relative to the *cut* corner, not
 the full-bleed canvas), `fontSizePt`/`fontWeight`/`isItalic`, `align`,
@@ -413,11 +413,16 @@ particular frame, open that frame's category file and adjust just that
 field's numbers — nothing else depends on them or needs to change in
 step. `flavor` starts `isItalic: true` in both `_base.json` and
 `classic.json` (conventional for MTG flavor text); every other field
-defaults to `false`. `signature` sits inline with `artist` (same `y`)
-but right-aligned at the opposite end of the row, bottom-right instead
-of bottom-left — for a proxy-maker's own credit/signature, which has
-no Scryfall equivalent (like `nickname`, it's excluded from the
-Scryfall-import field mapping in `Toolbar.tsx`).
+defaults to `false`. `edition` sits directly above `artist`, and
+`signature` sits inline with `artist` (same `y`) but right-aligned at
+the opposite end of the row, bottom-right instead of bottom-left — for a
+proxy-maker's own set/printing note and personal credit/signature, which
+have no Scryfall equivalent (like `nickname`, both are excluded from the
+Scryfall-import field mapping in `Toolbar.tsx`). `artist` and
+`signature` also ship `locked`/`contentLocked` (see [Field
+locking](#field-locking) below) — a signature or credit line shouldn't
+move by accident, and by default only a premium account can rewrite
+either one's text.
 
 An optional `fontFamily` on a field overrides `DEFAULT_FONT_FAMILY`
 (`config.ts`) just for that field — e.g. a script face for flavor text —
@@ -496,9 +501,9 @@ is currently in the design (`activeFrameCategory`, via
 override file yet, falls back to `_base.json`. The "Text Fields" toolbar
 menu (`TextTemplateMenu.tsx`) converts a resolved template to an actual
 text layer (offsetting by the cut-to-canvas margin, and using the
-template's `color`) when you pick one, or all eight when you pick "Add
+template's `color`) when you pick one, or all nine when you pick "Add
 all fields" — the latter lands as a single undo step (`addLayers` in the
-store), not eight.
+store), not nine.
 
 **Shrink-to-fit runs live in the editor now, not just at export.** Text
 boxes with `overflow: "shrink"` used to only actually shrink in the
@@ -698,6 +703,87 @@ design might have unsaved changes (a plain `window.confirm`) — loading a
 different design, or starting a blank one, clears undo/redo history
 (`loadDesign` in `designStore.ts`), so there's nothing to Ctrl/Cmd+Z
 back to once you've navigated away from what you had.
+
+## Field locking
+
+Every layer carries two independent booleans (`LayerBase.locked` /
+`LayerBase.contentLocked`, `packages/scene-schema/src/schema.ts`), not
+one — they answer two different questions:
+
+- **`locked`** — can this layer be *moved, resized, or rotated*? Checked
+  everywhere a layer's transform can change: `LayerNode.tsx`'s
+  `draggable`, `CanvasStage.tsx`'s `attachTransformer` (a locked layer is
+  excluded from the Konva `Transformer`'s node list entirely, so its
+  resize/rotate handles don't even appear), `designStore.ts`'s
+  `nudgeLayers` (arrow-key nudge), and the properties panel's X/Y/Width/
+  Height/Rotation number inputs (`disabled` whenever `layer.locked`).
+  **Never gated by any user entitlement** — anyone can flip it via the
+  lock icon in the layer panel or properties panel, regardless of
+  `contentLocked` or the current user's access level. This is the "don't
+  let a signature drift off its corner by an accidental drag" lock.
+- **`contentLocked`** — can this layer's *content* be edited (a
+  `TextLayer`'s text; the rarity dropdown, for the one designated rarity/
+  set-symbol layer)? When true, editing additionally requires
+  `Entitlements.canEditLockedContent` — the "premium" gate. The
+  properties panel's Content textarea and the rarity `<select>` are both
+  `disabled` whenever a layer is `contentLocked` and the current
+  entitlements say no, and the Content field's label shows a lock icon
+  (filled accent color if the current account can edit anyway, muted if
+  not) so it's visually obvious a field is gated even before you try
+  typing into it.
+
+A layer can be `locked` and not `contentLocked`, `contentLocked` and not
+`locked`, both, or neither — the two never imply each other. The spec
+this followed: premium should let an account rewrite text that's
+otherwise fixed (a legal line, a signature), but should never let *any*
+account casually drag that same text out of position — hence two
+separate flags instead of one.
+
+**`Entitlements`** (`apps/editor/src/entitlements.ts`) is a small,
+deliberately dumb interface — `{ canEditLockedContent: boolean }` — not a
+token, session, or user object. Card Studio has no auth of its own (see
+[How this is meant to connect to
+moxproxies-website](#how-this-is-meant-to-connect-to-moxproxies-website)),
+so it never decides who's premium; it just holds the one boolean answer
+and reacts to it. `DEFAULT_ENTITLEMENTS` (`canEditLockedContent: false`)
+is what a design starts with absent any other signal.
+`designStore.ts`'s `createDesignStore` takes an optional initial value,
+and the store exposes a `setEntitlements` action for changing it later —
+`<card-studio-editor>` (`embed.ts`) surfaces both halves of that: a
+`can-edit-locked-content` boolean attribute read once at mount (for a
+host that already knows the answer synchronously) and a
+`.setEntitlements()` method for calling any time after (for a host
+resolving an async auth/subscription check). When
+moxproxies-website's real premium check exists, the host page computes
+`canEditLockedContent` from its own session and passes it in one of
+those two ways — nothing on the Card Studio side needs to change. The
+standalone dev entry point (`main.tsx`, `pnpm dev:editor`) has its own
+throwaway wiring for this — `?premium=1` in the URL — that's local-only
+scaffolding, not part of the embed's real integration surface.
+
+**`artist`, `signature`, and the rarity/set-symbol layer default to both
+locks on.** The first two via their `text-template-library/*.json`
+entries (`TextFieldTemplate.locked`/`.contentLocked`, consumed by
+`templateToLayer` in `Toolbar.tsx`); the rarity layer isn't
+template-JSON-driven (it's a singleton, not one of `textTemplates`'
+fields — see [Adding/changing rarity
+symbols](#addingchanging-rarity-symbols)), so its defaults live as named
+constants instead, `RARITY_DEFAULT_LOCKED`/`RARITY_DEFAULT_CONTENT_LOCKED`
+in `rarityConfig.ts`. Every other shipped field defaults both flags to
+`false` (freely movable and editable, the pre-existing behavior). A
+frame category's own `text-template-library/<category>.json` can set
+different defaults per field the same way any other per-field value is
+overridden.
+
+Implementing `locked` as a real, complete guarantee (not just "can't
+drag on canvas") surfaced three pre-existing gaps, fixed alongside this
+feature: `nudgeLayers` didn't check `locked` at all (arrow keys could
+still move a "locked" layer); `attachTransformer` attached every
+selected node to the `Transformer` regardless of `locked`, so resize/
+rotate handles stayed active even though drag was already correctly
+blocked; and the properties panel's X/Y/Width/Height/Rotation inputs had
+no `disabled` gating on `locked` at all, so retyping coordinates by hand
+always worked regardless of the lock.
 
 ## Design decisions
 
@@ -1012,6 +1098,14 @@ Not implemented yet, but the shape of it:
   own auth system.
 - `sourceCardDesignId` already exists on `Design` (see schema) as the
   join point back to a `CardDesign` row.
+- The one piece of premium/entitlement plumbing that *does* exist today
+  is `Entitlements.canEditLockedContent` (see [Field
+  locking](#field-locking)) — a plain boolean the host page passes down
+  via the `can-edit-locked-content` attribute or `.setEntitlements()`.
+  When a real premium check exists on moxproxies-website, computing that
+  boolean from the logged-in user's subscription and passing it in is
+  the entire integration; nothing on the Card Studio side needs to
+  change.
 
 ## Not built yet
 

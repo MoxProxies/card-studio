@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Design, Layer, LayerGroup } from "@card-studio/scene-schema";
+import { type Entitlements, DEFAULT_ENTITLEMENTS } from "../entitlements";
 
 const HISTORY_LIMIT = 50;
 export const MIN_ZOOM = 0.1;
@@ -81,6 +82,14 @@ export interface DesignState {
    * canvas — same as the cut-line/safe-area guides, which already bake
    * into that export today. */
   showBleed: boolean;
+  /** What the current user is allowed to do with contentLocked layers —
+   * see entitlements.ts. View-only, not part of the design or undo
+   * history (who's allowed to edit what isn't a property of the design
+   * itself) — set at store creation from whatever the host page knows
+   * (embed.ts's `can-edit-locked-content` attribute) and updatable live
+   * via setEntitlements (embed.ts's `setEntitlements()` method), e.g.
+   * once an async auth check resolves after mount. */
+  entitlements: Entitlements;
   /** Canvas view transform (view-only, not part of the design or undo
    * history). zoom 1 = the editor's native EDITOR_DPI resolution; pan is in
    * screen pixels, applied to the pan/zoom Group, not the Stage itself. */
@@ -90,6 +99,7 @@ export interface DesignState {
 
   toggleSafeArea: () => void;
   toggleBleed: () => void;
+  setEntitlements: (entitlements: Entitlements) => void;
   /** Sets zoom, optionally keeping a screen-space point (e.g. the cursor)
    * stationary by adjusting pan to compensate. */
   setZoom: (zoom: number, focal?: { x: number; y: number }) => void;
@@ -166,7 +176,7 @@ export interface DesignState {
   redo: () => void;
 }
 
-export function createDesignStore(initialDesign: Design) {
+export function createDesignStore(initialDesign: Design, initialEntitlements: Entitlements = DEFAULT_ENTITLEMENTS) {
   return create<DesignState>((set) => ({
     design: initialDesign,
     past: [],
@@ -175,12 +185,14 @@ export function createDesignStore(initialDesign: Design) {
     selectedLayerIds: [],
     showSafeArea: true,
     showBleed: true,
+    entitlements: initialEntitlements,
     zoom: 1,
     panX: 0,
     panY: 0,
 
     toggleSafeArea: () => set((state) => ({ showSafeArea: !state.showSafeArea })),
     toggleBleed: () => set((state) => ({ showBleed: !state.showBleed })),
+    setEntitlements: (entitlements) => set({ entitlements }),
 
     setZoom: (zoom, focal) =>
       set((state) => {
@@ -274,8 +286,12 @@ export function createDesignStore(initialDesign: Design) {
 
     nudgeLayers: (ids, dxMm, dyMm) =>
       set((state) => {
+        // Arrow-key nudge respects `locked` the same as canvas dragging
+        // does (LayerNode.tsx's `draggable`) — a locked layer among a
+        // multi-selection just doesn't move while its unlocked
+        // selection-mates do.
         const entries = state.design.layers
-          .filter((l) => ids.includes(l.id))
+          .filter((l) => ids.includes(l.id) && !l.locked)
           .map((l) => ({ id: l.id, patch: { x: l.x + dxMm, y: l.y + dyMm } }));
         if (entries.length === 0) return state;
         return {

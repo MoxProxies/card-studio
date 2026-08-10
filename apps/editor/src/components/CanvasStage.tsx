@@ -169,14 +169,22 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   }, [viewport.width, viewport.height]);
 
   const attachTransformer = () => {
-    const nodes = selectedLayerIds.map((id) => nodeRefs.get(id)).filter((n): n is Konva.Node => !!n);
+    // A locked layer gets no resize/rotate handles at all, not just no
+    // drag — the Transformer's own handles are otherwise completely
+    // independent of LayerNode's `draggable` prop, so without this a
+    // "locked" layer could still be freely resized/rotated on canvas.
+    const lockedIds = new Set(design.layers.filter((l) => l.locked).map((l) => l.id));
+    const nodes = selectedLayerIds
+      .filter((id) => !lockedIds.has(id))
+      .map((id) => nodeRefs.get(id))
+      .filter((n): n is Konva.Node => !!n);
     const transformer = transformerRef.current;
     if (!transformer) return;
     transformer.nodes(nodes);
     transformer.getLayer()?.batchDraw();
   };
 
-  useEffect(attachTransformer, [selectedLayerIds]);
+  useEffect(attachTransformer, [selectedLayerIds, design.layers]);
 
   function computeSnapAndApply(node: Konva.Node, activeId: string): Guide[] {
     const w = node.width();

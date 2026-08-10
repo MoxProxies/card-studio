@@ -13,7 +13,7 @@ import { DesignLibraryModal } from "./DesignLibraryModal";
 import { getTextTemplates, type TextFieldTemplate } from "../textTemplates";
 import { getFrameAsset } from "../frameAssets";
 import { RARITY_ASSETS, getRarityAssetUrl } from "../rarityAssets";
-import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX } from "../rarityConfig";
+import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX, RARITY_DEFAULT_LOCKED, RARITY_DEFAULT_CONTENT_LOCKED } from "../rarityConfig";
 import { DEFAULT_FONT_FAMILY } from "../config";
 import { primaryCardFields, type ScryfallCard } from "../scryfall";
 import { designStorage } from "../designStorage";
@@ -44,6 +44,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const toggleBleed = useDesignStore((s) => s.toggleBleed);
   const renameDesign = useDesignStore((s) => s.renameDesign);
   const loadDesign = useDesignStore((s) => s.loadDesign);
+  const entitlements = useDesignStore((s) => s.entitlements);
   const zoom = useDesignStore((s) => s.zoom);
   const panX = useDesignStore((s) => s.panX);
   const panY = useDesignStore((s) => s.panY);
@@ -72,6 +73,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
+      contentLocked: false,
       // New frames size to the full-bleed canvas, not just the cut/trim
       // dimensions — frame art needs to extend past the trim line, or the
       // printed card shows a background-color gap around the edge once
@@ -105,6 +107,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
+      contentLocked: false,
       ...centerBox(),
     });
 
@@ -153,7 +156,13 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     rotationDeg: 0,
     opacity: 1,
     visible: true,
-    locked: false,
+    // Whether this field starts position-locked and/or content-locked is
+    // also a per-template, per-frame decision, same as everything else
+    // above — see TextFieldTemplate.locked/contentLocked's doc comments
+    // and README's "Field locking" section. Neither is set on most
+    // shipped fields; artist/signature default both to true.
+    locked: template.locked ?? false,
+    contentLocked: template.contentLocked ?? false,
     x: cutOffsetX + template.x,
     y: cutOffsetY + template.y,
     width: template.width,
@@ -167,6 +176,13 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   // rarityConfig.ts.
   const rarityLayer = design.layers.find((l): l is Extract<Layer, { type: "image" }> => l.type === "image" && l.id === RARITY_LAYER_ID);
   const currentRarityId = rarityLayer?.assetId ?? "";
+  // Whether picking a rarity is gated the same way editing a
+  // contentLocked text field's content is — checked even before a rarity
+  // layer exists yet, using what it *would* default to
+  // (RARITY_DEFAULT_CONTENT_LOCKED), so there's no "the first pick is
+  // free, only changing it afterward is locked" inconsistency.
+  const rarityContentLocked = rarityLayer ? rarityLayer.contentLocked : RARITY_DEFAULT_CONTENT_LOCKED;
+  const rarityLocked = rarityContentLocked && !entitlements.canEditLockedContent;
   const orderedRarities = [...RARITY_ASSETS].sort((a, b) => {
     const ai = RARITY_DISPLAY_ORDER.indexOf(a.id);
     const bi = RARITY_DISPLAY_ORDER.indexOf(b.id);
@@ -186,7 +202,8 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     rotationDeg: 0,
     opacity: 1,
     visible: true,
-    locked: false,
+    locked: RARITY_DEFAULT_LOCKED,
+    contentLocked: RARITY_DEFAULT_CONTENT_LOCKED,
     x: cutOffsetX + RARITY_SYMBOL_BOX.x,
     y: cutOffsetY + RARITY_SYMBOL_BOX.y,
     width: RARITY_SYMBOL_BOX.width,
@@ -269,6 +286,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
+      contentLocked: false,
       x: 0,
       y: 0,
       width: design.size.widthMm,
@@ -278,9 +296,9 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
 
   // Field id -> Scryfall value, mirroring the ids text-template-library/
   // fields use (title/manaCost/typeline/rules/flavor/powerToughness/
-  // artist) so each maps onto the matching resolved template. Nickname and
-  // signature have no Scryfall equivalent and are deliberately left out —
-  // nothing to fill them with.
+  // artist) so each maps onto the matching resolved template. Nickname,
+  // signature, and edition have no Scryfall equivalent and are
+  // deliberately left out — nothing to fill them with.
   const scryfallFieldValues = (fields: ReturnType<typeof primaryCardFields>): Record<string, string | undefined> => ({
     title: fields.name,
     manaCost: fields.manaCost || undefined,
@@ -321,6 +339,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           opacity: 1,
           visible: true,
           locked: false,
+          contentLocked: false,
           x: 0,
           y: 0,
           width: design.size.widthMm,
@@ -367,6 +386,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
+      contentLocked: false,
       ...centerBox(),
     });
 
@@ -424,7 +444,12 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
         style={{ width: 130 }}
         value={currentRarityId}
         onChange={(e) => setRarity(e.target.value)}
-        title="Rarity symbol — prefills its position from RARITY_SYMBOL_BOX in rarityConfig.ts"
+        disabled={rarityLocked}
+        title={
+          rarityLocked
+            ? "Content-locked by default — requires a premium account to change"
+            : "Rarity symbol — prefills its position from RARITY_SYMBOL_BOX in rarityConfig.ts"
+        }
       >
         <option value="">Rarity…</option>
         {orderedRarities.map((r) => (

@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { Design, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/scene-schema";
 import { DesignProvider } from "./store/DesignProvider";
 import { createDesignStore, type DesignStore } from "./store/designStore";
+import { DEFAULT_ENTITLEMENTS, type Entitlements } from "./entitlements";
 import { App } from "./App";
 // Imported as raw strings (not injected into document.head) because this
 // element renders into a shadow root — a global <style> tag can't cross the
@@ -18,7 +19,7 @@ import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
  *
  * Usage from the host page:
  *   <script type="module" src="https://studio.moxproxies.com/embed/card-studio-embed.js"></script>
- *   <card-studio-editor initial-design='{...}'></card-studio-editor>
+ *   <card-studio-editor initial-design='{...}' can-edit-locked-content></card-studio-editor>
  *
  * The element dispatches a bubbling, composed "design-change" CustomEvent
  * (detail: the current Design JSON) on every edit, so the host page can
@@ -30,6 +31,17 @@ import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
  * moxproxies-website user, uploading art, and requesting a print-quality
  * render are the host page's job, calling the render/API service with
  * whatever session token it already has.
+ *
+ * The one exception is `Entitlements.canEditLockedContent` (the "premium"
+ * gate for contentLocked fields — artist/signature/the rarity symbol by
+ * default; see schema.ts's LayerBase doc comments and README's "Field
+ * locking" section) — this element takes it as a plain boolean, either
+ * up front via the `can-edit-locked-content` boolean attribute (present =
+ * true, read once at mount) or live via `.setEntitlements()`, for a host
+ * that only knows the answer after an async auth/subscription check
+ * resolves. Computing that boolean from an actual moxproxies-website
+ * session/subscription is entirely the host page's job; this element
+ * never sees a token or makes an auth call of its own.
  */
 export class CardStudioEditorElement extends HTMLElement {
   #root: Root | null = null;
@@ -53,7 +65,8 @@ export class CardStudioEditorElement extends HTMLElement {
     shadow.appendChild(container);
 
     const initialDesign = this.#readInitialDesign();
-    this.#store = createDesignStore(initialDesign);
+    const initialEntitlements = this.#readInitialEntitlements();
+    this.#store = createDesignStore(initialDesign, initialEntitlements);
     this.#store.subscribe((state) => {
       this.dispatchEvent(
         new CustomEvent("design-change", { detail: state.design, bubbles: true, composed: true })
@@ -75,6 +88,16 @@ export class CardStudioEditorElement extends HTMLElement {
     return this.#store?.getState().design ?? null;
   }
 
+  /** Updates what the current user is allowed to do with contentLocked
+   * layers — call this any time after mount, e.g. once an async auth/
+   * subscription check resolves (the `can-edit-locked-content` attribute
+   * only covers what's known synchronously at mount). Takes effect
+   * immediately: any contentLocked field's content input re-enables (or
+   * disables) on the next render. */
+  setEntitlements(entitlements: Entitlements): void {
+    this.#store?.getState().setEntitlements(entitlements);
+  }
+
   #readInitialDesign(): Design {
     const raw = this.getAttribute("initial-design");
     if (raw) {
@@ -85,6 +108,10 @@ export class CardStudioEditorElement extends HTMLElement {
       }
     }
     return createEmptyDesign(crypto.randomUUID(), STANDARD_CARD_SIZE_MM);
+  }
+
+  #readInitialEntitlements(): Entitlements {
+    return { ...DEFAULT_ENTITLEMENTS, canEditLockedContent: this.hasAttribute("can-edit-locked-content") };
   }
 }
 

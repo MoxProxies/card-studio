@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import type { Design } from "@card-studio/scene-schema";
 import { createDesignStore, type DesignStore, type DesignState } from "./designStore";
+import type { Entitlements } from "../entitlements";
 
 /**
  * The store hook is created per <DesignProvider> instance (not a module
@@ -9,17 +10,20 @@ import { createDesignStore, type DesignStore, type DesignState } from "./designS
  *
  * Accepts either a ready-made `store` (so a caller — e.g. the embed
  * custom element — can hold a reference to the same store the React
- * tree renders from) or an `initialDesign` to create one internally.
+ * tree renders from) or an `initialDesign` (+ optional
+ * `initialEntitlements`, standalone-app callers only — the embed element
+ * builds its own store with createDesignStore directly, see embed.ts) to
+ * create one internally.
  */
 const DesignStoreContext = createContext<DesignStore | null>(null);
 
 type DesignProviderProps = { children: ReactNode } & (
-  | { store: DesignStore; initialDesign?: undefined }
-  | { initialDesign: Design; store?: undefined }
+  | { store: DesignStore; initialDesign?: undefined; initialEntitlements?: undefined }
+  | { initialDesign: Design; initialEntitlements?: Entitlements; store?: undefined }
 );
 
-export function DesignProvider({ store, initialDesign, children }: DesignProviderProps) {
-  const [ownStore] = useState(() => store ?? createDesignStore(initialDesign!));
+export function DesignProvider({ store, initialDesign, initialEntitlements, children }: DesignProviderProps) {
+  const [ownStore] = useState(() => store ?? createDesignStore(initialDesign!, initialEntitlements));
   return <DesignStoreContext.Provider value={ownStore}>{children}</DesignStoreContext.Provider>;
 }
 

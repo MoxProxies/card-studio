@@ -17,3 +17,14 @@ export const RARITY_LAYER_ID = "rarity-symbol";
  * listed here (a rarity added to rarity-library/ without updating this)
  * falls in afterward, alphabetically, rather than being hidden. */
 export const RARITY_DISPLAY_ORDER = ["common", "uncommon", "rare", "mythic"];
+
+/** The rarity/set-symbol layer defaults to both locked (nobody drags it
+ * by accident) and contentLocked (changing *which* rarity is shown
+ * requires the canEditLockedContent entitlement) — same "official symbol
+ * that shouldn't move or change casually" treatment as the artist/
+ * signature text fields default to in text-template-library/. The two
+ * are independent (see schema.ts's LayerBase doc comments); both true
+ * here just reflects that this one layer is meant to be doubly
+ * protected by default. */
+export const RARITY_DEFAULT_LOCKED = true;
+export const RARITY_DEFAULT_CONTENT_LOCKED = true;

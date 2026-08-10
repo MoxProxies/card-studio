@@ -45,6 +45,18 @@ export interface TextFieldTemplate {
     blurPt?: number;
     opacity?: number;
   };
+  /** Default value for the new layer's `locked` (position/transform lock)
+   * field — omit for the schema default (false, i.e. freely movable).
+   * Independent of contentLocked below, and never gated by any user
+   * entitlement — see schema.ts's LayerBase doc comments and README's
+   * "Field locking" section. */
+  locked?: boolean;
+  /** Default value for the new layer's `contentLocked` field — omit for
+   * the schema default (false, i.e. anyone can edit this field's text).
+   * When true, editing the content requires the current user to have
+   * Entitlements.canEditLockedContent (apps/editor/src/entitlements.ts)
+   * — the "premium" gate. */
+  contentLocked?: boolean;
 }
 
 interface TextTemplateCatalog {

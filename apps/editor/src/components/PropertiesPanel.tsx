@@ -52,6 +52,7 @@ export function PropertiesPanel({ width }: { width: number }) {
   const removeLayers = useDesignStore((s) => s.removeLayers);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
   const groupLayers = useDesignStore((s) => s.groupLayers);
+  const entitlements = useDesignStore((s) => s.entitlements);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
 
   const selectedLayers = design.layers.filter((l) => selectedLayerIds.includes(l.id));
@@ -136,10 +137,16 @@ export function PropertiesPanel({ width }: { width: number }) {
     onBlur: commitLiveEdit,
   });
 
+  // Disabled whenever the layer is locked — position/size/rotation is
+  // exactly what `locked` means (see schema.ts's LayerBase doc comment),
+  // so typing a new value here has to be blocked the same way canvas
+  // dragging and the Transformer's resize/rotate handles already are, or
+  // the panel would be a way around the lock.
   const liveNumber = (key: "x" | "y" | "width" | "height" | "rotationDeg", step = 0.1) => ({
     type: "number" as const,
     value: Number((layer[key] as number).toFixed(2)),
     step,
+    disabled: layer.locked,
     onFocus: beginLiveEdit,
     onChange: (e: ChangeEvent<HTMLInputElement>) => updateLayerLive(layer.id, { [key]: Number(e.target.value) } as Partial<Layer>),
     onBlur: commitLiveEdit,
@@ -258,11 +265,31 @@ export function PropertiesPanel({ width }: { width: number }) {
       {layer.type === "text" && (
         <>
           <div style={fieldRowStyle}>
-            <span style={labelStyle}>Content</span>
+            <span style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 4 }}>
+              Content
+              {layer.contentLocked && (
+                <span
+                  style={{ display: "inline-flex" }}
+                  title={
+                    entitlements.canEditLockedContent
+                      ? "Content-locked by the template, but your account can edit it anyway"
+                      : "Content-locked by the template — editing requires a premium account"
+                  }
+                >
+                  <Lock size={11} color={entitlements.canEditLockedContent ? "var(--cs-accent)" : "var(--cs-text-muted)"} />
+                </span>
+              )}
+            </span>
             <textarea
               className="cs-input"
               rows={3}
               value={layer.content}
+              disabled={layer.contentLocked && !entitlements.canEditLockedContent}
+              title={
+                layer.contentLocked && !entitlements.canEditLockedContent
+                  ? "This field's content is locked by the template — requires a premium account to edit"
+                  : undefined
+              }
               onFocus={beginLiveEdit}
               onChange={(e) => updateLayerLive(layer.id, { content: e.target.value })}
               onBlur={commitLiveEdit}
