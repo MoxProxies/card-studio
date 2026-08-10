@@ -18,6 +18,7 @@ import {
   Copy,
   Trash2,
   ImageOff,
+  Group as GroupIcon,
 } from "lucide-react";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
@@ -50,6 +51,7 @@ export function PropertiesPanel({ width }: { width: number }) {
   const commitLiveEdit = useDesignStore((s) => s.commitLiveEdit);
   const removeLayers = useDesignStore((s) => s.removeLayers);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
+  const groupLayers = useDesignStore((s) => s.groupLayers);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
 
   const selectedLayers = design.layers.filter((l) => selectedLayerIds.includes(l.id));
@@ -103,7 +105,17 @@ export function PropertiesPanel({ width }: { width: number }) {
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+          <button
+            className="cs-btn"
+            onClick={() => {
+              const name = window.prompt("Group name", "Group");
+              if (name === null) return;
+              groupLayers(selectedLayerIds, name.trim() || "Group");
+            }}
+          >
+            <GroupIcon size={14} /> Group
+          </button>
           <button className="cs-btn" onClick={() => duplicateLayers(selectedLayerIds)}>
             <Copy size={14} /> Duplicate
           </button>

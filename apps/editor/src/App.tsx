@@ -13,8 +13,12 @@ const PANEL_MAX_WIDTH = 520;
 // side panels need explicit widths. Properties panel defaults wider than
 // layers — its two-column numeric fields are what overflowed before
 // cs-input had width:100%; keeping the default roomy avoids reintroducing
-// that by accident on a narrower browser window.
-const DEFAULT_LAYER_PANEL_WIDTH = 220;
+// that by accident on a narrower browser window. Layer panel widened from
+// 220 for grouping (LayerPanel.tsx): a group header row's drag handle +
+// folder icon + name + visible/lock/ungroup/delete buttons is
+// meaningfully wider than a plain layer row ever was — 220 truncated
+// almost every label down to a couple of characters.
+const DEFAULT_LAYER_PANEL_WIDTH = 260;
 const DEFAULT_PROPERTIES_PANEL_WIDTH = 300;
 
 const clamp = (value: number) => Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WIDTH, value));

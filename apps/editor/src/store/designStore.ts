@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Design, Layer } from "@card-studio/scene-schema";
+import type { Design, Layer, LayerGroup } from "@card-studio/scene-schema";
 
 const HISTORY_LIMIT = 50;
 export const MIN_ZOOM = 0.1;
@@ -24,6 +24,25 @@ function applyPatches(design: Design, entries: Array<{ id: string; patch: Partia
 
 function cloneLayerWithOffset(layer: Layer, offsetMm: number): Layer {
   return { ...layer, id: crypto.randomUUID(), name: `${layer.name} copy`, x: layer.x + offsetMm, y: layer.y + offsetMm };
+}
+
+/** Tags every layer whose id is in `layerIds` with `groupId`, first moving
+ * them contiguous in z-order (near the topmost original member's
+ * position) if they aren't already — see LayerBase.groupId's doc comment
+ * for why grouped layers are expected to sit contiguous in `layers`.
+ * Fewer than two ids resolving to real layers is a no-op (returns `layers`
+ * unchanged) — nothing meaningful to group. Pure; caller decides whether
+ * to also register the group in Design.groups (skip that if this was a
+ * no-op). */
+function groupContiguous(layers: Layer[], layerIds: string[], groupId: string): Layer[] {
+  const idsSet = new Set(layerIds);
+  const members = layers.filter((l) => idsSet.has(l.id));
+  if (members.length < 2) return layers;
+  const grouped = members.map((l) => ({ ...l, groupId }) as Layer);
+  const remaining = layers.filter((l) => !idsSet.has(l.id));
+  const topMemberIndex = Math.max(...layers.map((l, i) => (idsSet.has(l.id) ? i : -1)));
+  const insertAt = layers.slice(0, topMemberIndex + 1).filter((l) => !idsSet.has(l.id)).length;
+  return [...remaining.slice(0, insertAt), ...grouped, ...remaining.slice(insertAt)];
 }
 
 export interface DesignState {
@@ -67,6 +86,13 @@ export interface DesignState {
   addLayer: (layer: Layer) => void;
   /** Adds multiple layers as a single undo step (e.g. "add all text fields"). */
   addLayers: (layers: Layer[]) => void;
+  /** Adds new layers and, in the same undo step, groups them (optionally
+   * together with already-existing layers, e.g. a rarity symbol added on
+   * an earlier click) per `groupDefs` — each entry's `layerIds` names every
+   * member of that group, new and/or pre-existing. A group definition
+   * that resolves to fewer than two real layers is silently skipped (see
+   * groupContiguous). Used by "Add all fields"'s default groupings. */
+  addLayersWithGroups: (newLayers: Layer[], groupDefs: Array<{ name: string; layerIds: string[] }>) => void;
   /** Replaces the whole layer array in one undo step, selecting `selectIds`
    * — for operations needing specific z-order control addLayers's
    * always-append can't give (e.g. Scryfall import slotting art beneath an
@@ -75,8 +101,32 @@ export interface DesignState {
   removeLayers: (ids: string[]) => void;
   duplicateLayers: (ids: string[]) => void;
   moveLayer: (id: string, direction: "up" | "down") => void;
+  /** General-purpose free reordering (drag-and-drop in the layer panel) —
+   * rebuilds `layers` to match `newOrderIds` exactly. A no-op (state
+   * unchanged, no history entry) if the id set doesn't match the design's
+   * current layers, e.g. a stale drag after some other change. */
+  reorderLayers: (newOrderIds: string[]) => void;
   nudgeLayers: (ids: string[], dxMm: number, dyMm: number) => void;
   renameDesign: (name: string) => void;
+  /** Wholesale-replaces the design (loading a saved one, or starting a
+   * fresh one) — clears undo/redo history and selection along with it,
+   * same as opening a different document in any other editor. Not itself
+   * undoable (there's nothing to return *to* once history is cleared);
+   * see DesignLibraryModal.tsx. */
+  loadDesign: (design: Design) => void;
+
+  /** Groups >= 2 layers under a new named LayerGroup, moving them
+   * contiguous in z-order first (near the topmost selected layer's
+   * original position) — see LayerBase.groupId's doc comment for why
+   * contiguity matters. Selects the grouped layers. No-op if fewer than
+   * two ids resolve to real layers. */
+  groupLayers: (layerIds: string[], name: string) => void;
+  /** Dissolves a group (clears groupId on its members) without deleting
+   * them. */
+  ungroupLayers: (groupId: string) => void;
+  /** Deletes a group *and* every layer currently in it. */
+  deleteGroup: (groupId: string) => void;
+  renameGroup: (groupId: string, name: string) => void;
 
   /** One discrete, undoable change (drag end, transform end, a single control commit). */
   commitLayerChange: (id: string, patch: Partial<Layer>) => void;
@@ -190,6 +240,14 @@ export function createDesignStore(initialDesign: Design) {
         return { past: [...state.past, state.design].slice(-HISTORY_LIMIT), future: [], design: { ...state.design, layers } };
       }),
 
+    reorderLayers: (newOrderIds) =>
+      set((state) => {
+        const byId = new Map(state.design.layers.map((l) => [l.id, l]));
+        const layers = newOrderIds.map((id) => byId.get(id)).filter((l): l is Layer => l !== undefined);
+        if (layers.length !== state.design.layers.length) return state;
+        return { past: [...state.past, state.design].slice(-HISTORY_LIMIT), future: [], design: { ...state.design, layers } };
+      }),
+
     nudgeLayers: (ids, dxMm, dyMm) =>
       set((state) => {
         const entries = state.design.layers
@@ -208,6 +266,73 @@ export function createDesignStore(initialDesign: Design) {
         past: [...state.past, state.design].slice(-HISTORY_LIMIT),
         future: [],
         design: { ...state.design, name },
+      })),
+
+    loadDesign: (design) => set({ design, past: [], future: [], pendingSnapshot: null, selectedLayerIds: [] }),
+
+    groupLayers: (layerIds, name) =>
+      set((state) => {
+        const groupId = crypto.randomUUID();
+        const layers = groupContiguous(state.design.layers, layerIds, groupId);
+        if (layers === state.design.layers) return state;
+        return {
+          past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+          future: [],
+          design: { ...state.design, layers, groups: [...state.design.groups, { id: groupId, name }] },
+          selectedLayerIds: layerIds,
+        };
+      }),
+
+    addLayersWithGroups: (newLayers, groupDefs) =>
+      set((state) => {
+        let layers = [...state.design.layers, ...newLayers];
+        const groups: LayerGroup[] = [...state.design.groups];
+        for (const def of groupDefs) {
+          const groupId = crypto.randomUUID();
+          const next = groupContiguous(layers, def.layerIds, groupId);
+          if (next === layers) continue;
+          layers = next;
+          groups.push({ id: groupId, name: def.name });
+        }
+        return {
+          past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+          future: [],
+          design: { ...state.design, layers, groups },
+          selectedLayerIds: newLayers.map((l) => l.id),
+        };
+      }),
+
+    ungroupLayers: (groupId) =>
+      set((state) => ({
+        past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+        future: [],
+        design: {
+          ...state.design,
+          layers: state.design.layers.map((l) => (l.groupId === groupId ? ({ ...l, groupId: undefined } as Layer) : l)),
+          groups: state.design.groups.filter((g) => g.id !== groupId),
+        },
+      })),
+
+    deleteGroup: (groupId) =>
+      set((state) => {
+        const removedIds = new Set(state.design.layers.filter((l) => l.groupId === groupId).map((l) => l.id));
+        return {
+          past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+          future: [],
+          design: {
+            ...state.design,
+            layers: state.design.layers.filter((l) => l.groupId !== groupId),
+            groups: state.design.groups.filter((g) => g.id !== groupId),
+          },
+          selectedLayerIds: state.selectedLayerIds.filter((id) => !removedIds.has(id)),
+        };
+      }),
+
+    renameGroup: (groupId, name) =>
+      set((state) => ({
+        past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+        future: [],
+        design: { ...state.design, groups: state.design.groups.map((g) => (g.id === groupId ? { ...g, name } : g)) },
       })),
 
     commitLayerChange: (id, patch) =>

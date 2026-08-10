@@ -2,19 +2,21 @@ import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import type { Layer } from "@card-studio/scene-schema";
-import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Scissors } from "lucide-react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Scissors, Save } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
-import { PRINT_DPI } from "@card-studio/scene-schema";
+import { PRINT_DPI, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
 import { FrameLibraryModal } from "./FrameLibraryModal";
 import { TextTemplateMenu } from "./TextTemplateMenu";
 import { ScryfallSearchModal } from "./ScryfallSearchModal";
+import { DesignLibraryModal } from "./DesignLibraryModal";
 import { getTextTemplates, type TextFieldTemplate } from "../textTemplates";
 import { getFrameAsset } from "../frameAssets";
 import { RARITY_ASSETS, getRarityAssetUrl } from "../rarityAssets";
 import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX } from "../rarityConfig";
 import { DEFAULT_FONT_FAMILY } from "../config";
 import { primaryCardFields, type ScryfallCard } from "../scryfall";
+import { designStorage } from "../designStorage";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -26,6 +28,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
   const addLayers = useDesignStore((s) => s.addLayers);
+  const addLayersWithGroups = useDesignStore((s) => s.addLayersWithGroups);
   const replaceLayers = useDesignStore((s) => s.replaceLayers);
   const commitLayerChange = useDesignStore((s) => s.commitLayerChange);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
@@ -39,11 +42,14 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const toggleSafeArea = useDesignStore((s) => s.toggleSafeArea);
   const showBleed = useDesignStore((s) => s.showBleed);
   const toggleBleed = useDesignStore((s) => s.toggleBleed);
+  const renameDesign = useDesignStore((s) => s.renameDesign);
+  const loadDesign = useDesignStore((s) => s.loadDesign);
   const zoom = useDesignStore((s) => s.zoom);
   const panX = useDesignStore((s) => s.panX);
   const panY = useDesignStore((s) => s.panY);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
   const [showScryfallSearch, setShowScryfallSearch] = useState(false);
+  const [showDesignLibrary, setShowDesignLibrary] = useState(false);
 
   const centerBox = () => {
     const w = design.size.widthMm * 0.6;
@@ -155,7 +161,6 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   });
 
   const addTextField = (template: TextFieldTemplate) => addLayer(templateToLayer(template));
-  const addAllTextFields = () => addLayers(textTemplates.map(templateToLayer));
 
   // The rarity-symbol image is a singleton, found-or-created by its fixed
   // id (RARITY_LAYER_ID) rather than tracked as separate UI state — see
@@ -187,6 +192,42 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     width: RARITY_SYMBOL_BOX.width,
     height: RARITY_SYMBOL_BOX.height,
   });
+
+  /**
+   * "Add all fields" — every field the current template set has, plus a
+   * default rarity-symbol layer if one isn't already present (so there's
+   * something for "Typeline and rarity" to actually group, since rarity
+   * isn't one of textTemplates' own fields — see rarityConfig.ts). Groups
+   * three pairs by default: title+mana cost, typeline+rarity, rules+
+   * flavour — everything else (nickname, P/T, artist, signature) stays
+   * ungrouped. One undo step via addLayersWithGroups, which also covers
+   * the "rarity already existed" case (its groupId gets set in place,
+   * without needing a second history entry) — see designStore.ts.
+   */
+  const addAllTextFields = () => {
+    const newFieldLayers = textTemplates.map(templateToLayer);
+    const layerIdByFieldId = new Map(textTemplates.map((t, i) => [t.id, newFieldLayers[i]!.id]));
+
+    let extraRarityLayer: Layer | null = null;
+    if (!rarityLayer) {
+      const defaultRarityId = RARITY_DISPLAY_ORDER[0];
+      const url = defaultRarityId ? getRarityAssetUrl(defaultRarityId) : undefined;
+      if (defaultRarityId && url) extraRarityLayer = buildRarityLayer(defaultRarityId, url);
+    }
+    const newLayers = extraRarityLayer ? [...newFieldLayers, extraRarityLayer] : newFieldLayers;
+
+    const groupDefs: Array<{ name: string; layerIds: string[] }> = [];
+    const titleId = layerIdByFieldId.get("title");
+    const manaCostId = layerIdByFieldId.get("manaCost");
+    if (titleId && manaCostId) groupDefs.push({ name: "Title and mana cost", layerIds: [titleId, manaCostId] });
+    const typelineId = layerIdByFieldId.get("typeline");
+    if (typelineId) groupDefs.push({ name: "Typeline and rarity", layerIds: [typelineId, RARITY_LAYER_ID] });
+    const rulesId = layerIdByFieldId.get("rules");
+    const flavorId = layerIdByFieldId.get("flavor");
+    if (rulesId && flavorId) groupDefs.push({ name: "Rules and flavour", layerIds: [rulesId, flavorId] });
+
+    addLayersWithGroups(newLayers, groupDefs);
+  };
 
   const setRarity = (rarityId: string) => {
     if (!rarityId) {
@@ -237,9 +278,9 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
 
   // Field id -> Scryfall value, mirroring the ids text-template-library/
   // fields use (title/manaCost/typeline/rules/flavor/powerToughness/
-  // artist) so each maps onto the matching resolved template. Nickname has
-  // no Scryfall equivalent and is deliberately left out — nothing to fill
-  // it with.
+  // artist) so each maps onto the matching resolved template. Nickname and
+  // signature have no Scryfall equivalent and are deliberately left out —
+  // nothing to fill them with.
   const scryfallFieldValues = (fields: ReturnType<typeof primaryCardFields>): Record<string, string | undefined> => ({
     title: fields.name,
     manaCost: fields.manaCost || undefined,
@@ -449,9 +490,29 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
         Cut {fmt(design.size.cutWidthMm)}×{fmt(design.size.cutHeightMm)}mm · bleed to {fmt(design.size.widthMm)}×
         {fmt(design.size.heightMm)}mm
       </span>
+      <button className="cs-btn" onClick={() => setShowDesignLibrary(true)} title="Save or load a design">
+        <Save size={16} /> Designs
+      </button>
       <button className="cs-btn" onClick={handleExport} title={`Export PNG at ${PRINT_DPI} DPI`}>
         <Download size={16} /> Export ({PRINT_DPI} DPI)
       </button>
+
+      {showDesignLibrary && (
+        <DesignLibraryModal
+          design={design}
+          onRename={renameDesign}
+          onSave={() => designStorage.save(design)}
+          onNew={() => {
+            loadDesign(createEmptyDesign(crypto.randomUUID(), STANDARD_CARD_SIZE_MM));
+            setShowDesignLibrary(false);
+          }}
+          onLoad={(loaded) => {
+            loadDesign(loaded);
+            setShowDesignLibrary(false);
+          }}
+          onClose={() => setShowDesignLibrary(false)}
+        />
+      )}
 
       {showFrameLibrary && (
         <FrameLibraryModal

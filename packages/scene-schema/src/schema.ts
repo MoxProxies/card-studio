@@ -18,6 +18,17 @@ const LayerBase = z.object({
   opacity: z.number().min(0).max(1).default(1),
   visible: z.boolean().default(true),
   locked: z.boolean().default(false),
+  /** Id of a Design.groups entry this layer belongs to, if any — purely an
+   * organizational label for the layer panel (bulk select/hide/lock/move,
+   * a shared header), not a transform hierarchy: z-order is still just
+   * `layers` array order, unaffected by group membership, and a grouped
+   * layer's x/y/rotation stay independent of its groupmates'. Layers
+   * sharing a groupId are expected to sit contiguously in `layers` — the
+   * layer panel derives visual group blocks by clustering consecutive
+   * same-groupId layers rather than from a separate membership list, so
+   * groupLayers (designStore.ts) always makes that true when a group is
+   * created. */
+  groupId: z.string().optional(),
 });
 
 export const FrameLayer = LayerBase.extend({
@@ -120,6 +131,16 @@ export type CardSize = z.infer<typeof CardSize>;
 
 export const SCENE_SCHEMA_VERSION = 1;
 
+/** A named organizational label for a set of layers — see LayerBase's
+ * groupId doc comment. Registry lives on the Design, not embedded in each
+ * layer, so the name/id are defined once regardless of how many layers
+ * belong to it. */
+export const LayerGroup = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type LayerGroup = z.infer<typeof LayerGroup>;
+
 export const Design = z.object({
   schemaVersion: z.literal(SCENE_SCHEMA_VERSION).default(SCENE_SCHEMA_VERSION),
   id: z.string(),
@@ -128,6 +149,11 @@ export const Design = z.object({
   backgroundColor: z.string().default("#ffffff"),
   /** Ordered back-to-front: index 0 renders first (bottom). */
   layers: z.array(Layer).default([]),
+  /** Every group any layer's groupId currently references — see
+   * LayerBase.groupId. A group with no member layers left (e.g. its last
+   * layer was deleted individually rather than via a group action) is
+   * harmless dead metadata, not cleaned up automatically. */
+  groups: z.array(LayerGroup).default([]),
   /** Id of the moxproxies-website CardDesign this design is linked to, if any. */
   sourceCardDesignId: z.string().nullable().default(null),
 });
@@ -141,6 +167,7 @@ export function createEmptyDesign(id: string, size: CardSize): Design {
     size,
     backgroundColor: "#ffffff",
     layers: [],
+    groups: [],
     sourceCardDesignId: null,
   });
 }

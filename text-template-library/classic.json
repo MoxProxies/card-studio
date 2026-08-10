@@ -126,5 +126,21 @@
     "isItalic": false,
     "minFontSizePt": 4,
     "maxFontSizePt": 7
+  },
+  {
+    "id": "signature",
+    "label": "Signature",
+    "defaultContent": "(Signature)",
+    "x": 46.5,
+    "y": 84.4,
+    "width": 14,
+    "height": 2.6,
+    "fontSizePt": 6,
+    "fontWeight": "normal",
+    "align": "right",
+    "color": "#111111",
+    "isItalic": false,
+    "minFontSizePt": 4,
+    "maxFontSizePt": 7
   }
 ]

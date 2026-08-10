@@ -12,8 +12,9 @@ and "injected" into that site rather than merged into its codebase.
 Early scaffold. The pieces below are wired together and verified working
 end-to-end (typecheck, build, real render smoke tests, and browser-driven
 UX checks — including the embedded shadow-DOM path, not just the
-standalone dev server), but there's still no persistence/auth — see
-[Not built yet](#not-built-yet).
+standalone dev server), but there's still no auth, and persistence is
+`localStorage`-only (no backend/database/account yet) — see [Not built
+yet](#not-built-yet).
 
 The editor (`apps/editor`) currently supports:
 - Add frame/text/image/shape layers; drag, resize, rotate via a Konva
@@ -97,6 +98,21 @@ The editor (`apps/editor`) currently supports:
   View-only, like the safe-area toggle — doesn't change the design or
   the print export, which always renders the full rectangular bleed a
   printer needs to trim from.
+- Layers are freely reorderable by dragging in the layer panel (a grip
+  handle on the left of each row), not just one step at a time — and
+  can be grouped under a named, collapsible-in-spirit header (multi-select
+  → "Group" in the properties panel, or automatically when "Add all
+  fields" runs) for bulk select/hide/lock/move. See [Layer
+  groups](#layer-groups) below.
+- Save/load: a "Designs" button in the toolbar saves the current design
+  (name + layers + groups) and lists every save to reload later — see
+  [Save/load](#saveload) below. Client-side only for now (no
+  moxproxies-website account or database behind it yet — see [Not built
+  yet](#not-built-yet)), but built against a small storage interface so
+  swapping in a real backend later doesn't touch the UI.
+- A "Signature" text field (`Text Fields` menu, and included in "Add all
+  fields") — inline with Artist/Credit but right-aligned at the opposite,
+  bottom-right corner instead of bottom-left.
 
 ## Layout
 
@@ -384,7 +400,8 @@ text-template-library/
 ```
 
 Each file is a JSON array of the standard fields (title, nickname, mana
-cost, typeline, rules, flavor, power/toughness, artist/credit) — each
+cost, typeline, rules, flavor, power/toughness, artist/credit,
+signature) — each
 field's `x`/`y`/`width`/`height` (mm, relative to the *cut* corner, not
 the full-bleed canvas), `fontSizePt`/`fontWeight`/`isItalic`, `align`,
 and `color` are independent values, not derived from a shared grid
@@ -393,7 +410,11 @@ particular frame, open that frame's category file and adjust just that
 field's numbers — nothing else depends on them or needs to change in
 step. `flavor` starts `isItalic: true` in both `_base.json` and
 `classic.json` (conventional for MTG flavor text); every other field
-defaults to `false`.
+defaults to `false`. `signature` sits inline with `artist` (same `y`)
+but right-aligned at the opposite end of the row, bottom-right instead
+of bottom-left — for a proxy-maker's own credit/signature, which has
+no Scryfall equivalent (like `nickname`, it's excluded from the
+Scryfall-import field mapping in `Toolbar.tsx`).
 
 An optional `fontFamily` on a field overrides `DEFAULT_FONT_FAMILY`
 (`config.ts`) just for that field — e.g. a script face for flavor text —
@@ -529,7 +550,8 @@ of the following the card actually has data for:
   logic the rarity dropdown itself uses (`buildRarityLayer`, extracted
   so both places build an identical layer shape).
 
-`addLayers` (used by "Add all fields") always appends at the top of the
+`addLayers`/`addLayersWithGroups` (used by "Add all fields", see [Layer
+groups](#layer-groups)) always append new layers at the top of the
 z-order, which can't express "art below the frame, text above it" in a
 single step — that combination needed a new store action,
 `replaceLayers(layers, selectIds)`, that commits a caller-computed full
@@ -557,6 +579,86 @@ shape (`page.route()` in a throwaway Playwright script). The endpoint
 URLs and response shape are Scryfall's stable, long-documented public
 API; worth a real end-to-end smoke test once this runs somewhere with
 normal internet access.
+
+## Layer groups
+
+A group is a name plus a set of layers — `Design.groups: { id, name }[]`
+is the registry, and each `Layer` carries an optional `groupId` pointing
+into it (`packages/scene-schema/src/schema.ts`). It's an organizational
+label, not a transform hierarchy: z-order is still just `layers` array
+order (a group doesn't nest its members under a parent transform), and a
+grouped layer's own x/y/rotation stay completely independent of its
+groupmates'. What grouping actually buys you is in the layer panel — a
+shared header (name, visible/lock toggles that apply to every member at
+once, ungroup, delete-group-and-contents) and bulk drag-reordering (the
+whole group moves as one block).
+
+**Layers sharing a groupId are expected to sit contiguous in `layers`.**
+`LayerPanel.tsx` derives what to render by walking the array and
+clustering *consecutive* same-groupId layers into one block — there's no
+separate membership list it cross-checks against, so this is really an
+invariant the code that creates groups has to uphold, not something
+enforced structurally. `groupContiguous` (`designStore.ts`) is the one
+place that assigns a groupId, and it always moves the named layers
+next to each other first (near the topmost original member's position,
+not jumping the block to the very front/back of the stack) before
+tagging them — both `groupLayers` (the properties panel's "Group"
+button, for an ad hoc multi-select) and `addLayersWithGroups` ("Add all
+fields"'s default groupings, see below) go through it. A groupId that
+somehow ended up non-contiguous (there's no code path that produces
+this today) would just render as more than one same-named cluster
+instead of corrupting anything.
+
+**"Add all fields" groups three pairs by default**, via
+`addLayersWithGroups`: Title+Mana Cost, Typeline+Rarity, and
+Rules+Flavour. Everything else it adds (Nickname, Power/Toughness,
+Artist/Credit, Signature) stays ungrouped. The rarity symbol is a
+pre-existing singleton layer (`RARITY_LAYER_ID`, see [Adding/changing
+rarity symbols](#addingchanging-rarity-symbols)), not one of
+`textTemplates`' own fields, so there's nothing to group Typeline
+*with* unless one already exists — "Add all fields" creates a default
+`common`-rarity layer first if the design doesn't have one yet.
+`addLayersWithGroups` handles both cases (a brand new rarity layer
+being added in the same click, or an already-present one from an
+earlier click) identically and atomically: it appends the new field
+layers, then runs `groupContiguous` once per default pairing over the
+*combined* (existing + just-added) layer list, all as a single undo
+step — pressing Ctrl/Cmd+Z once undoes the whole "Add all fields",
+groups included, regardless of which of the two rarity cases applied.
+
+**Drag-and-drop reordering is native HTML5 DnD, not a library** — no new
+dependency, and the interaction is simple enough (reorder a flat list of
+rows) not to need one. The drag handle (`GripVertical` icon) is the
+`draggable` element, not the row itself, so a drag can only start from
+that small grip — the row's own click-to-select and its icon buttons
+are completely unaffected. Only *top-level* rows (a standalone layer, or
+a whole group treated as one block) are drag-reorderable; within a
+group, the small up/down buttons on each member row are the only way to
+reorder — there's no drag-within-a-group in this version.
+
+## Save/load
+
+`designStorage.ts` is a small interface (`list`/`load`/`save`/`remove`)
+with one implementation today, `localStorageDesignStorage` — this app
+has no backend of its own (see [Not built yet](#not-built-yet)), so
+"save" currently means the browser's `localStorage`, one JSON blob
+holding every save keyed by `design.id`. `DesignLibraryModal.tsx` (the
+toolbar's "Designs" button) is the only consumer, and it only ever talks
+to the `DesignStorage` interface — swapping in a real
+moxproxies-website-backed API later (list/save/load/remove against a
+`CardDesign` row, once auth/session handoff exists) means reassigning
+what the module's exported `designStorage` points to; the modal itself
+doesn't change. Loading always goes through `Design.parse()`, so a save
+made by an older version of this app (missing a field a newer schema
+added since) still loads cleanly — the same defaulting behavior the
+embed's `initial-design` attribute and the render service's request
+body already rely on.
+
+Saving/loading/starting a new design all confirm first if the current
+design might have unsaved changes (a plain `window.confirm`) — loading a
+different design, or starting a blank one, clears undo/redo history
+(`loadDesign` in `designStore.ts`), so there's nothing to Ctrl/Cmd+Z
+back to once you've navigated away from what you had.
 
 ## Design decisions
 
@@ -880,12 +982,13 @@ Not implemented yet, but the shape of it:
   [Adding/changing rarity symbols](#addingchanging-rarity-symbols) — not
   a button in the UI; there's also no way yet for a running deployment
   to pick up a new one without a rebuild/redeploy)
-- Persistence (saving/loading designs — currently all in-memory,
-  including panel widths and the safe-area/bleed-preview toggles, which
-  reset on reload)
+- Real (database-backed) persistence — designs can be saved/loaded now
+  (see [Save/load](#saveload)), but only to the browser's own
+  `localStorage`; nothing syncs to a server, account, or across devices
+  yet. Panel widths and the safe-area/bleed-preview toggles are still
+  pure in-memory view state either way (not part of a saved design) and
+  reset on reload regardless.
 - Auth/session handoff from moxproxies-website
 - An API layer in front of `services/render` (it's currently a bare
   render endpoint, no auth, no storage of results)
 - Deploy config for either app
-- Inline symbols outside `overflow: "shrink"` (see [Inline symbols in
-  text](#inline-symbols-in-text)'s known limitation)
