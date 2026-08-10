@@ -17,6 +17,7 @@ import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX, RARITY_DEFAUL
 import { DEFAULT_FONT_FAMILY } from "../config";
 import { primaryCardFields, type ScryfallCard } from "../scryfall";
 import { designStorage } from "../designStorage";
+import { resolveArtWindowMm } from "../frameArtWindow";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -323,11 +324,17 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       .filter((template) => values[template.id])
       .map((template) => ({ ...templateToLayer(template), content: values[template.id]! }));
 
-    // Full-bleed box, "cover" fit — same reasoning as addImage's default
-    // sizing: guarantees the art reaches every edge behind the frame's art
-    // window (and the bleed margin beyond it) regardless of the source
-    // crop's exact aspect ratio, instead of leaving a gap wherever it
-    // doesn't precisely match the canvas's.
+    // Sized to the frame's actual illustration window, not the full-bleed
+    // card — unlike addImage's default (a full pre-made card scan, already
+    // shaped like the whole card), Scryfall's `art_crop` is just the
+    // illustration on its own, a much more landscape aspect ratio than the
+    // card itself. Stretching it full-bleed with `fit: "cover"` (the old
+    // behavior) forced that landscape image through a tall, narrow box,
+    // cropping away roughly half of it on the sides. `fit: "cover"` within
+    // the actual (much closer-to-landscape) window still crops to fill —
+    // that's unavoidable without knowing the source crop's exact aspect —
+    // but nowhere near as much, and the result actually lands where a
+    // card's illustration goes instead of behind the whole frame.
     const artLayer: Layer | undefined = fields.artCropUrl
       ? {
           id: newId(),
@@ -340,10 +347,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           visible: true,
           locked: false,
           contentLocked: false,
-          x: 0,
-          y: 0,
-          width: design.size.widthMm,
-          height: design.size.heightMm,
+          ...resolveArtWindowMm(activeFrameCategory, design.size),
         }
       : undefined;
 

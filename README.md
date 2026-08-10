@@ -551,13 +551,21 @@ of the following the card actually has data for:
   with no data (e.g. no flavor text) is skipped outright rather than
   adding an empty/placeholder layer. There's no template field for a
   nickname, so that one's never filled from Scryfall.
-- The card's own illustration (`image_uris.art_crop` — the artwork
-  alone, no card frame around it, matching what an Image layer
-  underneath a Frame layer expects) as an Image layer, aspect-ratio-sized
-  the same way a manual upload is (`getImageNaturalSize`'s sibling
-  `getRemoteImageSize`, same reasoning). Inserted *beneath* the frame
-  layer if one exists (splicing into the layer array, not appended) so
-  the frame's transparent art window shows it, instead of covering the
+- The card's own illustration (`image_uris.art_crop` — just the
+  artwork, no card border around it) as an Image layer, `fit: "cover"`
+  sized to the current frame category's illustration window
+  (`resolveArtWindowMm` in `frameArtWindow.ts`) rather than the full
+  full-bleed card — `art_crop` is a landscape crop of just the
+  illustration, a much wider aspect ratio than the card itself, so
+  stretching it full-bleed the way a manual full-card-scan upload
+  defaults to (see `addImage` in `Toolbar.tsx`) forced it through a
+  tall, narrow box and cropped away roughly half of it on the sides.
+  `resolveArtWindowMm` falls back to `classic`'s window (measured from
+  its PNG's alpha channel) for any frame category without a dedicated
+  entry of its own — add one there for a category whose window sits
+  somewhere meaningfully different. Inserted *beneath* the frame layer
+  if one exists (splicing into the layer array, not appended) so the
+  frame's transparent art window shows it, instead of covering the
   frame the way appending on top would.
 - The rarity symbol, if `rarity` matches a `rarity-library/` id (common/
   uncommon/rare/mythic already do) — reuses the same find-or-create
