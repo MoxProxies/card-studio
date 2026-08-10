@@ -22,25 +22,6 @@ function newId(): string {
 
 const fmt = (mm: number) => Number(mm.toFixed(2)).toString();
 
-async function getImageNaturalSize(file: File): Promise<{ width: number; height: number }> {
-  const bitmap = await createImageBitmap(file);
-  const size = { width: bitmap.width, height: bitmap.height };
-  bitmap.close();
-  return size;
-}
-
-/** Natural size of a remote image (e.g. Scryfall art) — same aspect-ratio
- * need as getImageNaturalSize, but for a URL instead of a local File. */
-function getRemoteImageSize(src: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
-    img.src = src;
-  });
-}
-
 export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
@@ -110,10 +91,10 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       align: "left",
       lineHeight: 1.2,
       overflow: "shrink",
-      shadowOffsetXPt: 1,
-      shadowOffsetYPt: 1,
-      shadowBlurPt: 0,
-      shadowOpacity: 0.6,
+      shadowOffsetXPt: 0,
+      shadowOffsetYPt: 0,
+      shadowBlurPt: 1,
+      shadowOpacity: 0.75,
       rotationDeg: 0,
       opacity: 1,
       visible: true,
@@ -151,10 +132,10 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     align: template.align,
     lineHeight: 1.15,
     overflow: "shrink",
-    shadowOffsetXPt: 1,
-    shadowOffsetYPt: 1,
-    shadowBlurPt: 0,
-    shadowOpacity: 0.6,
+    shadowOffsetXPt: 0,
+    shadowOffsetYPt: 0,
+    shadowBlurPt: 1,
+    shadowOpacity: 0.75,
     rotationDeg: 0,
     opacity: 1,
     visible: true,
@@ -213,22 +194,22 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     addLayer(buildRarityLayer(rarityId, url));
   };
 
-  const addImage = async (file: File) => {
+  const addImage = (file: File) => {
     const src = URL.createObjectURL(file);
-    const { width: naturalWidth, height: naturalHeight } = await getImageNaturalSize(file);
-    const imageAspect = naturalWidth / naturalHeight;
-
-    // Default to the image's own aspect ratio, contained within the
-    // full-bleed canvas (centered) rather than a fixed box — a fixed box
-    // ignoring the image's shape is what caused new images to render
-    // squished, and containing within just the cut area (rather than
-    // bleed) is what left a background-color gap around art meant to
-    // extend to the card's true edge.
-    const canvasW = design.size.widthMm;
-    const canvasH = design.size.heightMm;
-    const width = imageAspect > canvasW / canvasH ? canvasW : canvasH * imageAspect;
-    const height = imageAspect > canvasW / canvasH ? canvasW / imageAspect : canvasH;
-
+    // Default to the full-bleed canvas, edge to edge, same as "Add Frame"
+    // — not a box aspect-fit to the image's own shape. Aspect-fitting used
+    // to be the default (see git history) to stop random art crops from
+    // getting squished into a fixed box, but it has its own failure mode:
+    // any imported image whose aspect ratio isn't *exactly* the canvas's
+    // (which is normal — different print pipelines round pixel dimensions
+    // differently) gets letterboxed with a visible gap on one axis instead
+    // of actually reaching the edge, which defeats the point for an image
+    // that's already meant to be the whole full-bleed card. `fit: "cover"`
+    // preserves the image's own aspect ratio without distortion (no
+    // squish) while guaranteeing the box itself is always filled — any
+    // mismatch is cropped, invisibly, rather than left as a gap. A smaller
+    // art crop not meant to fill the whole card can still be resized down
+    // afterward, same as always.
     addLayer({
       id: newId(),
       name: file.name,
@@ -239,10 +220,10 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       opacity: 1,
       visible: true,
       locked: false,
-      x: (design.size.widthMm - width) / 2,
-      y: (design.size.heightMm - height) / 2,
-      width,
-      height,
+      x: 0,
+      y: 0,
+      width: design.size.widthMm,
+      height: design.size.heightMm,
     });
   };
 
@@ -265,11 +246,9 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
    * Adds all the text fields (and the card's own art, and its rarity
    * symbol) a Scryfall card has data for, as one undo step. Only fields
    * with an actual value get added — no placeholder text for e.g. a card
-   * with no flavor text. Art needs its natural size to size the layer
-   * without distortion (same reasoning as addImage), which is why this is
-   * async; everything else is synchronous once that resolves.
+   * with no flavor text.
    */
-  const importFromScryfall = async (card: ScryfallCard) => {
+  const importFromScryfall = (card: ScryfallCard) => {
     const fields = primaryCardFields(card);
     const values = scryfallFieldValues(fields);
 
@@ -277,18 +256,13 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
       .filter((template) => values[template.id])
       .map((template) => ({ ...templateToLayer(template), content: values[template.id]! }));
 
-    let artLayer: Layer | undefined;
-    if (fields.artCropUrl) {
-      try {
-        const { width: naturalWidth, height: naturalHeight } = await getRemoteImageSize(fields.artCropUrl);
-        const imageAspect = naturalWidth / naturalHeight;
-        // Contained within the full-bleed canvas, not just cut — same
-        // reasoning as addImage's default sizing.
-        const canvasW = design.size.widthMm;
-        const canvasH = design.size.heightMm;
-        const width = imageAspect > canvasW / canvasH ? canvasW : canvasH * imageAspect;
-        const height = imageAspect > canvasW / canvasH ? canvasW / imageAspect : canvasH;
-        artLayer = {
+    // Full-bleed box, "cover" fit — same reasoning as addImage's default
+    // sizing: guarantees the art reaches every edge behind the frame's art
+    // window (and the bleed margin beyond it) regardless of the source
+    // crop's exact aspect ratio, instead of leaving a gap wherever it
+    // doesn't precisely match the canvas's.
+    const artLayer: Layer | undefined = fields.artCropUrl
+      ? {
           id: newId(),
           name: `${fields.name} (art)`,
           type: "image",
@@ -298,16 +272,12 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
           opacity: 1,
           visible: true,
           locked: false,
-          x: (design.size.widthMm - width) / 2,
-          y: (design.size.heightMm - height) / 2,
-          width,
-          height,
-        };
-      } catch {
-        // Art failed to load (network hiccup, hotlink block, ...) —
-        // everything else still gets added; add art manually if this happens.
-      }
-    }
+          x: 0,
+          y: 0,
+          width: design.size.widthMm,
+          height: design.size.heightMm,
+        }
+      : undefined;
 
     // Art belongs *beneath* the frame (so the frame's transparent art
     // window shows it) while text belongs on top of everything — addLayers
@@ -354,7 +324,21 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const handleExport = () => {
     const stage = stageRef.current;
     if (!stage) return;
+    // Cut-line/safe-area/snap guides, the marquee, and the Transformer's
+    // selection handles are editor-only overlays, not part of the card —
+    // toDataURL() below is a literal snapshot of whatever the Konva stage
+    // currently renders, so they have to be hidden (and a synchronous
+    // .draw() forced, since toDataURL composites from each layer's own
+    // already-rendered canvas rather than redrawing from scratch — an
+    // async/batched redraw wouldn't be reflected yet) for the duration of
+    // the capture, then restored.
+    const hidden = stage.find(".cs-export-hide");
+    hidden.forEach((node) => node.visible(false));
+    stage.draw();
     const dataUrl = exportStageToPngDataUrl(stage, design.size, PRINT_DPI, { panX, panY, zoom });
+    hidden.forEach((node) => node.visible(true));
+    stage.draw();
+
     const link = document.createElement("a");
     link.href = dataUrl;
     link.download = `${design.name || "card"}.png`;

@@ -80,10 +80,10 @@ export const TextLayer = LayerBase.extend({
    * not just the glyphs — for a consistent look on tokens embedded
    * mid-paragraph (see "Inline symbols in text" in the README). */
   shadowColor: z.string().optional(),
-  shadowOffsetXPt: z.number().default(1),
-  shadowOffsetYPt: z.number().default(1),
-  shadowBlurPt: z.number().min(0).default(0),
-  shadowOpacity: z.number().min(0).max(1).default(0.6),
+  shadowOffsetXPt: z.number().default(0),
+  shadowOffsetYPt: z.number().default(0),
+  shadowBlurPt: z.number().min(0).default(1),
+  shadowOpacity: z.number().min(0).max(1).default(0.75),
 });
 
 export const ShapeLayer = LayerBase.extend({

@@ -448,53 +448,58 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
               ))}
             </Group>
 
-            {/* Cut line — where the card is actually trimmed. Only meaningful
-                (and only drawn) when the bleed itself is visible; with the
-                bleed hidden the card's own solid, rounded edge already is
-                the cut line. */}
-            {showBleed && (
-              <Rect
-                x={cutInsetXPx}
-                y={cutInsetYPx}
-                width={cutWidthPx}
-                height={cutHeightPx}
-                stroke="#ef4444"
-                dash={[4, 4]}
-                listening={false}
-              />
-            )}
+            {/* Every editor-only overlay below (cut-line, safe-area, snap
+                guides, marquee, and the Transformer's selection handles)
+                shares the "cs-export-hide" name so handleExport (Toolbar.tsx)
+                can look them up with one stage.find(".cs-export-hide") and
+                hide them for the duration of the client-side quick-proof
+                export — none of them belong in a card image. */}
+            <Group name="cs-export-hide" listening={false}>
+              {/* Cut line — where the card is actually trimmed. Only
+                  meaningful (and only drawn) when the bleed itself is
+                  visible; with the bleed hidden the card's own solid,
+                  rounded edge already is the cut line. */}
+              {showBleed && (
+                <Rect
+                  x={cutInsetXPx}
+                  y={cutInsetYPx}
+                  width={cutWidthPx}
+                  height={cutHeightPx}
+                  stroke="#ef4444"
+                  dash={[4, 4]}
+                />
+              )}
 
-            {/* Safe area — recommended inset from the cut line, toggle-able. */}
-            {showSafeArea && (
-              <Rect
-                x={safeInsetXPx}
-                y={safeInsetYPx}
-                width={safeWidthPx}
-                height={safeHeightPx}
-                stroke="#f59e0b"
-                dash={[4, 4]}
-                listening={false}
-              />
-            )}
+              {/* Safe area — recommended inset from the cut line, toggle-able. */}
+              {showSafeArea && (
+                <Rect
+                  x={safeInsetXPx}
+                  y={safeInsetYPx}
+                  width={safeWidthPx}
+                  height={safeHeightPx}
+                  stroke="#f59e0b"
+                  dash={[4, 4]}
+                />
+              )}
 
-            {guides.map((g, i) => (
-              <Line key={i} points={g.points} stroke="#ec4899" strokeWidth={1} dash={[4, 4]} listening={false} />
-            ))}
+              {guides.map((g, i) => (
+                <Line key={i} points={g.points} stroke="#ec4899" strokeWidth={1} dash={[4, 4]} />
+              ))}
 
-            {marqueeRect && (
-              <Rect
-                x={marqueeRect.x}
-                y={marqueeRect.y}
-                width={marqueeRect.width}
-                height={marqueeRect.height}
-                fill="rgba(59, 130, 246, 0.1)"
-                stroke="#3b82f6"
-                strokeWidth={1 / zoom}
-                listening={false}
-              />
-            )}
+              {marqueeRect && (
+                <Rect
+                  x={marqueeRect.x}
+                  y={marqueeRect.y}
+                  width={marqueeRect.width}
+                  height={marqueeRect.height}
+                  fill="rgba(59, 130, 246, 0.1)"
+                  stroke="#3b82f6"
+                  strokeWidth={1 / zoom}
+                />
+              )}
+            </Group>
 
-            <Transformer ref={transformerRef} rotateEnabled onTransformEnd={handleTransformEnd} />
+            <Transformer ref={transformerRef} name="cs-export-hide" rotateEnabled onTransformEnd={handleTransformEnd} />
           </Group>
         </KonvaLayer>
       </Stage>

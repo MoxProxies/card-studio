@@ -25,10 +25,16 @@ The editor (`apps/editor`) currently supports:
   the card's edge, is always reachable by zooming out or panning — see
   [Design decisions](#design-decisions) for why the Stage itself had to
   become a viewport rather than just adding scale to it.
-- Imported images default to their own aspect ratio (contained within
-  the full-bleed canvas, centered) instead of a fixed box — a fixed box
-  ignoring the source image's shape is what previously made every import
-  come in squished. See `getImageNaturalSize` in `Toolbar.tsx`.
+- Imported images default to the full-bleed canvas, edge to edge, with
+  `fit: "cover"` — never squished (a fixed box that stretched to fit,
+  ignoring the source image's own shape, is what previously made every
+  import come in squished) and never gapped at an edge either (an
+  earlier version aspect-fit the layer's box to the image's own natural
+  size instead, which more often than not left a visible gap on one
+  axis — any real-world image's pixel aspect ratio essentially never
+  matches the canvas's *exactly*). `fit: "cover"` crops whatever excess
+  that mismatch produces instead, invisibly. See `addImage` in
+  `Toolbar.tsx`.
 - A frame library (currently 6 original, generic trading-card frame
   templates, organized into folders — see [Adding frames](#adding-frames)
   below) with a searchable/filterable browser: a folder dropdown and a
@@ -602,11 +608,13 @@ actually implemented `contain`/`fill` — both silently always behaved
 like `cover`.** Both `LayerNode.tsx`'s plain `<KonvaImage>` (stretched to
 the layer's box, i.e. `fill`) and `renderDesign.ts`'s `drawImage`
 (always scaled to the *larger* of the two axis ratios and clipped, i.e.
-`cover`) ignored the field entirely — harmless while every image layer's
-box happened to already be sized to the image's own aspect ratio
-(`addImage` picks the box that way), but it would silently distort
-anything placed in a box of a different aspect ratio, which the rarity
-symbols are (a square-ish SVG dropped into a hand-picked box). Fixed
+`cover`) ignored the field entirely — harmless at the time, since every
+image layer's box happened to already be sized to the image's own
+aspect ratio (`addImage` picked the box that way, back then — it no
+longer does, see the full-bleed-import note above), but it would
+silently distort anything placed in a box of a different aspect ratio,
+which the rarity symbols are (a square-ish SVG dropped into a
+hand-picked box). Fixed
 with a shared `computeObjectFit` helper
 (`packages/scene-schema/src/objectFit.ts`, the same CSS `object-fit`
 math for all three modes) that both sides now call — `LayerNode.tsx`
@@ -670,14 +678,21 @@ showing — same `showSafeArea`-style state, not part of the design or
 undo history) and never touches the design JSON, so it can't affect the
 authoritative print-quality export (`services/render`, which renders
 straight from that JSON and always produces the full sharp-cornered
-bleed box a printer needs to trim from). It can end up baked into the
-toolbar's client-side "Export (800 DPI)" button's PNG if the toggle
-happens to be on when clicked, though — that export is an explicit
-`stage.toDataURL()` snapshot of whatever the Konva canvas currently
-shows (see its own doc comment: "good enough for previews/proofing",
-not the print path), and the cut-line/safe-area guides already have
-this same characteristic today, so it's a consistent, expected quirk of
-that quick-proof button rather than a new one.
+bleed box a printer needs to trim from). If it's on when the toolbar's
+client-side "Export (800 DPI)" button is clicked, the masked/rounded
+look *does* carry into that PNG, same as any other on-screen state of
+the card's actual content — which is expected, since that button is an
+explicit `stage.toDataURL()` snapshot of the card as currently shown
+(see its own doc comment: "good enough for previews/proofing", not the
+print path). Editor-only overlays (cut-line, safe-area, snap guides,
+marquee, Transformer selection handles) are a different story and never
+carry into that export: `handleExport` looks them up in one
+`stage.find(".cs-export-hide")` — every one of them shares that Konva
+`name` — hides each with `.visible(false)`, forces a synchronous
+`stage.draw()` (`toDataURL` composites from each layer's own
+already-rendered canvas, not a fresh redraw, so a merely-*scheduled*
+`batchDraw()` wouldn't be reflected in time), captures, then restores
+both.
 
   These numbers come from a real print vendor's 300 DPI spec (bleed
   816×1110px / cut 744×1038px / safe 684×981px) — the cut and safe
