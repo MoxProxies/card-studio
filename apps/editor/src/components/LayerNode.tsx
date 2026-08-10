@@ -273,25 +273,37 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
     const fit = image
       ? computeObjectFit(layer.fit, common.width, common.height, image.width, image.height)
       : { drawWidth: common.width, drawHeight: common.height, offsetX: 0, offsetY: 0, clip: false };
+    // "cover" fit (fit.clip) always scales the source up until it's at
+    // least as big as the box in both dimensions, then relies on clipping
+    // to hide whatever overhangs — that's fine for painting, but Konva's
+    // Container.getClientRect() sums its *children's* unclipped rects with
+    // no awareness of clipFunc/clip at all (see konva/lib/Container.js), so
+    // a Group clipped down to the layer's box still reports a client rect
+    // as big as the oversized, unclipped image. Anything that reads that
+    // (most importantly CanvasStage's Transformer — the selection handles)
+    // then balloons out to the image's full unclipped extent instead of
+    // the layer's actual footprint, which for a source aspect ratio far
+    // from the box's own (exactly what an imported Scryfall art crop
+    // usually is, see frameArtWindow.ts) can extend well past the card's
+    // edges. Cropping the *source* image via Konva.Image's own `crop` prop
+    // instead sidesteps this: the element's on-stage width/height already
+    // equal the box, so there's nothing left to clip and nothing oversized
+    // for getClientRect to pick up.
+    const scale = image && fit.drawWidth > 0 ? fit.drawWidth / image.width : 1;
+    const crop =
+      fit.clip && image && scale > 0
+        ? { x: -fit.offsetX / scale, y: -fit.offsetY / scale, width: common.width / scale, height: common.height / scale }
+        : undefined;
     return (
-      <Group
-        {...common}
-        ref={registerRef}
-        clipFunc={
-          fit.clip
-            ? (ctx) => {
-                ctx.rect(0, 0, common.width, common.height);
-              }
-            : undefined
-        }
-      >
+      <Group {...common} ref={registerRef}>
         {image && (
           <KonvaImage
             image={image}
-            x={fit.offsetX}
-            y={fit.offsetY}
-            width={fit.drawWidth}
-            height={fit.drawHeight}
+            x={crop ? 0 : fit.offsetX}
+            y={crop ? 0 : fit.offsetY}
+            width={crop ? common.width : fit.drawWidth}
+            height={crop ? common.height : fit.drawHeight}
+            crop={crop}
             ref={(node) => {
               imageShapeRef.current = node;
             }}

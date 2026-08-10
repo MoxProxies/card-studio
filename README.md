@@ -1087,6 +1087,30 @@ fix (Vite's `base` config), not just changing the string.
     Fixing it also let Rollup dead-code-eliminate React's whole dev-mode
     branch, dropping the bundle from ~1.6MB to ~750KB.
 
+**A `fit: "cover"` image's selection handles used to balloon out past the
+card's edges whenever the source image's aspect ratio was far from its
+box's** — most visibly on a Scryfall art crop (a landscape illustration)
+placed into the classic frame's illustration window (`frameArtWindow.ts`,
+close to square), the exact combination [Scryfall
+import](#scryfall-import) produces. `LayerNode.tsx` used to render
+`"cover"` by drawing the source image at its full scaled-up size (bigger
+than the box in whichever dimension overhangs) and hiding the overflow
+with a `clipFunc` on the wrapping `Group`. That clips what's *painted*
+correctly, but Konva's `Container.getClientRect()` (which `CanvasStage`'s
+Transformer calls to size the selection handles) sums its children's
+*unclipped* rects — it has no concept of `clipFunc`/`clip` at all (see
+`konva/lib/Container.js`) — so the reported bounding box was as big as
+the oversized, unclipped image, not the layer's actual box, and the
+Transformer's handles stretched out to match. Fixed by cropping the
+*source* image instead, via `Konva.Image`'s own `crop` prop (computed
+from the same `computeObjectFit` result `objectFit.ts` already produced,
+just converted from destination-space offset/draw-size back into
+source-space crop coordinates) — the on-stage image element's width/
+height already equal the box exactly, so there's nothing left to clip
+and nothing oversized for `getClientRect()` to pick up. `services/render`
+(a real 2D canvas context, not Konva) never had this problem — `ctx.clip()`
+there restricts actual pixels, not just a separately-tracked bounding box.
+
 ## How this is meant to connect to moxproxies-website
 
 Not implemented yet, but the shape of it:
