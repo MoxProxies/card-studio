@@ -293,14 +293,37 @@ export function PropertiesPanel({ width }: { width: number }) {
           </div>
           <div style={twoColStyle}>
             <div style={fieldRowStyle}>
-              <span style={labelStyle}>Size (pt)</span>
+              <span
+                style={labelStyle}
+                title={
+                  layer.maxFontSizePt !== undefined
+                    ? "A Max size is set, so this also moves Max size along with it — otherwise the shrink search still starts from Max size and this field would have no visible effect"
+                    : undefined
+                }
+              >
+                Size (pt)
+              </span>
               <input
                 className="cs-input"
                 type="number"
                 min={4}
                 value={layer.fontSizePt}
                 onFocus={beginLiveEdit}
-                onChange={(e) => updateLayerLive(layer.id, { fontSizePt: Number(e.target.value) })}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  // When a "grow to fill" range is set, shrinkTextToFit's
+                  // search starts from maxFontSizePt, not fontSizePt (see
+                  // textFit.ts) — so without also moving Max size here,
+                  // this field would silently do nothing visible for any
+                  // field with a range, which is every default MTG text
+                  // field (see text-template-library/). Keeping Min size
+                  // <= the new value too, so it stays a sane floor instead
+                  // of exceeding the size it's supposed to bound.
+                  const patch: Partial<Layer> = { fontSizePt: value };
+                  if (layer.maxFontSizePt !== undefined) patch.maxFontSizePt = value;
+                  if (layer.minFontSizePt !== undefined && layer.minFontSizePt > value) patch.minFontSizePt = value;
+                  updateLayerLive(layer.id, patch);
+                }}
                 onBlur={commitLiveEdit}
               />
             </div>

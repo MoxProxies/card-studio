@@ -444,14 +444,20 @@ box, not just shrink when it overflows.** Every shipped field sets both
 larger, more legible size instead of sitting fixed at 8pt with mostly
 empty space below it, while a genuinely long rules-text block still
 shrinks down toward the 5pt floor the way `overflow: "shrink"` always
-has. `fontSizePt` itself becomes closer to a legacy/fallback value once
-a range is set — the search always starts from `maxFontSizePt` and works
-down, so it's really the range's boundaries doing the work, not the
-authored size. Omit either bound (or both) on a field to keep the
-original shrink-only-from-`fontSizePt` behavior exactly as it was.
-Editable per-layer too, not just per-template: the properties panel
-shows "Min size"/"Max size" fields under Overflow whenever a text
-layer's overflow is "Shrink to fit."
+has. The search always starts from `maxFontSizePt`, not `fontSizePt`,
+whenever a range is set — so the properties panel's "Size (pt)" field
+also moves `maxFontSizePt` along with it when editing a layer that has
+one (and pulls `minFontSizePt` down too if it would otherwise exceed the
+new size), rather than silently doing nothing visible the way it did
+before this was added: without it, "Size" only ever fed the *ceiling*
+`maxFontSizePt ?? fontSizePt` already used, so editing it while a
+`maxFontSizePt` was set couldn't change what actually rendered. Omit
+either bound (or both) on a field to keep the original
+shrink-only-from-`fontSizePt` behavior exactly as it was — "Size" is a
+plain, direct control again in that case. Editable per-layer too, not
+just per-template: the properties panel shows "Min size"/"Max size"
+fields under Overflow whenever a text layer's overflow is "Shrink to
+fit."
 
 Because inline symbols (see [Inline symbols in
 text](#inline-symbols-in-text) above) size themselves to the current
