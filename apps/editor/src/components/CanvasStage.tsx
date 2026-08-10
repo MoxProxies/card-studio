@@ -424,15 +424,26 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
               shadowOpacity={0.25}
             />
 
-            {/* Layer content clips to the same rounded cut box when the bleed
-                is hidden — otherwise art/frame layers sized to bleed (the
-                default, see Toolbar's addFrame/addImage) would still poke
-                out past the rounded corners and the straight cut edge. */}
+            {/* Layer content always clips to *some* card-shaped boundary —
+                the full-bleed rect (sharp corners) when the bleed is
+                shown, the same rounded cut box the background Rect above
+                uses when it's hidden. Nothing a design ends up with should
+                ever paint past the full-bleed edge: that's the exact edge
+                of the exported/printed image (see units.ts), so a
+                misplaced or oversized layer — most commonly an imported
+                image or a manually resized frame — rendering into the
+                workspace background outside it isn't a preview of
+                anything real, just visual noise while editing. This is
+                a hard clip, not a toggle: the Transformer's own selection
+                handles live in the separate, unclipped "cs-export-hide"
+                group below, so a layer that overhangs the edge is still
+                fully selectable/draggable/resizable — only its painted
+                pixels are held to the boundary. */}
             <Group
-              clipFunc={
+              clipFunc={(ctx) =>
                 showBleed
-                  ? undefined
-                  : (ctx) => roundedRectPath(ctx, cutInsetXPx, cutInsetYPx, cutWidthPx, cutHeightPx, bleedMaskCornerRadiusPx)
+                  ? ctx.rect(0, 0, widthPx, heightPx)
+                  : roundedRectPath(ctx, cutInsetXPx, cutInsetYPx, cutWidthPx, cutHeightPx, bleedMaskCornerRadiusPx)
               }
             >
               {design.layers.map((layer) => (

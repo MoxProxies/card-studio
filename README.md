@@ -1111,6 +1111,25 @@ and nothing oversized for `getClientRect()` to pick up. `services/render`
 (a real 2D canvas context, not Konva) never had this problem — `ctx.clip()`
 there restricts actual pixels, not just a separately-tracked bounding box.
 
+**Layer content wasn't clipped to the full-bleed edge at all with the
+bleed guide showing (the default) — only the narrower cut box, and only
+once the bleed was toggled off.** `CanvasStage.tsx`'s layer-content
+`Group` had a `clipFunc` that only ever activated for the "preview
+trimmed card" mode (`!showBleed`); with the bleed shown there was no
+clip whatsoever, so an oversized or misplaced layer (most commonly an
+imported image, or a layer dragged/resized past the edge) painted
+straight into the workspace background outside the card — never a
+preview of anything real, since nothing past the full-bleed edge ever
+makes it into the exported image either way. Fixed by always clipping to
+*some* card-shaped boundary: the sharp-cornered full-bleed rect when the
+bleed guide is showing, the same rounded cut box as before once it's
+hidden. This is a hard clip, not a toggle — there's no legitimate design
+reason to want to see content past the actual printable edge — but it
+doesn't affect editing: the Transformer's selection handles live in a
+separate, unclipped group, so an overhanging layer is still fully
+visible-by-its-handles and draggable/resizable, only its painted pixels
+are held to the boundary.
+
 ## How this is meant to connect to moxproxies-website
 
 Not implemented yet, but the shape of it:
