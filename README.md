@@ -99,11 +99,14 @@ The editor (`apps/editor`) currently supports:
   the print export, which always renders the full rectangular bleed a
   printer needs to trim from.
 - Layers are freely reorderable by dragging in the layer panel (a grip
-  handle on the left of each row), not just one step at a time — and
-  can be grouped under a named, collapsible-in-spirit header (multi-select
-  → "Group" in the properties panel, or automatically when "Add all
-  fields" runs) for bulk select/hide/lock/move. See [Layer
-  groups](#layer-groups) below.
+  handle on the left of each row), not just one step at a time — and can
+  be grouped under a named, collapsible header (multi-select → "Group" in
+  the properties panel, or automatically when "Add all fields" runs) for
+  bulk select/hide/lock/move. See [Layer groups](#layer-groups) below.
+- A newly added layer (Frame/Text/Shape/Image, the rarity dropdown) is
+  inserted directly above whichever layer is currently selected, instead
+  of always at the very top of the stack — falls back to the top when
+  nothing's selected. See `insertAboveSelection` in `designStore.ts`.
 - Save/load: a "Designs" button in the toolbar saves the current design
   (name + layers + groups) and lists every save to reload later — see
   [Save/load](#saveload) below. Client-side only for now (no
@@ -635,6 +638,36 @@ are completely unaffected. Only *top-level* rows (a standalone layer, or
 a whole group treated as one block) are drag-reorderable; within a
 group, the small up/down buttons on each member row are the only way to
 reorder — there's no drag-within-a-group in this version.
+
+**A group's drop zone covers its whole rendered block, header down
+through its last member row — not just the header.** `rowDropProps`
+(the `onDragOver`/`onDrop` handlers) is on the outer wrapper `<div>` that
+contains both the header and the member rows, not the header alone.
+Attaching it only to the header initially meant there was nowhere to
+drop *below* a group that happened to be the last thing in the panel —
+member rows had no drag handlers of their own for the drop to bubble
+through, so a drag hovering over them (which is most of a group's
+height) registered no valid target at all, making "move something to
+the very back of the stack" impossible whenever a group was last.
+
+**Groups are collapsible** — a chevron button in the header (left of the
+folder icon) toggles whether member rows render at all;
+`collapsedGroupIds` is local `LayerPanel` component state (a `Set`, not
+in the design store), the same "view-only, doesn't need undo history or
+to survive a reload" treatment as `showSafeArea`/`showBleed`, just
+scoped to this one panel instead of shared app-wide.
+
+**A group header's un-selected background used to read as selected.**
+It was tinted `var(--cs-surface-soft)` (a step darker than the plain
+panel background, meant to read as "this is a header") even when
+nothing in the group was selected — chosen before `--cs-accent-soft`
+(the actual selected-row color) existed in the same warm palette, the
+two ended up close enough in hue and lightness that a header looked
+selected at a glance regardless of actual selection state. Fixed by
+dropping the default background to `transparent`, matching every other
+unselected row — the bold text, folder icon, and collapse chevron
+already read as "header" on their own, without needing a background
+tint to reinforce it.
 
 ## Save/load
 

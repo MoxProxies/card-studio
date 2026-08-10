@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type DragEvent } from "react";
-import { Frame, Type, Shapes, Image as ImageIcon, Trash2, Eye, EyeOff, Lock, Unlock, GripVertical, Folder, Ungroup, ChevronUp, ChevronDown } from "lucide-react";
+import { Frame, Type, Shapes, Image as ImageIcon, Trash2, Eye, EyeOff, Lock, Unlock, GripVertical, Folder, Ungroup, ChevronUp, ChevronDown, ChevronRight } from "lucide-react";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
 
@@ -63,6 +63,18 @@ export function LayerPanel({ width }: { width: number }) {
   const [dropTarget, setDropTarget] = useState<{ rowId: string; position: "before" | "after" } | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  // View-only, like showSafeArea/showBleed in the store — which groups are
+  // expanded doesn't need to survive a reload, and it's local to this one
+  // panel, so plain component state is enough (no need to thread it
+  // through the design store).
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (groupId: string) =>
+    setCollapsedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
 
   const groupNames = new Map(groups.map((g) => [g.id, g.name]));
   const entries = buildEntries(layers, groupNames);
@@ -221,9 +233,10 @@ export function LayerPanel({ width }: { width: number }) {
         const allVisible = members.every((m) => m.visible);
         const allLocked = members.every((m) => m.locked);
         const isEditing = editingGroupId === groupId;
+        const isCollapsed = collapsedGroupIds.has(groupId);
 
         return (
-          <div key={rowId} style={{ marginBottom: 2 }}>
+          <div key={rowId} style={{ marginBottom: 2, ...dropIndicatorStyle(rowId) }} {...rowDropProps(rowId)}>
             <div
               data-testid="layer-group-row"
               data-group-id={groupId}
@@ -234,7 +247,6 @@ export function LayerPanel({ width }: { width: number }) {
                   setSelection(memberIds);
                 }
               }}
-              {...rowDropProps(rowId)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -242,15 +254,25 @@ export function LayerPanel({ width }: { width: number }) {
                 padding: "5px 6px",
                 borderRadius: 6,
                 cursor: "pointer",
-                background: isGroupSelected ? "var(--cs-accent-soft)" : "var(--cs-surface-soft)",
+                background: isGroupSelected ? "var(--cs-accent-soft)" : "transparent",
                 fontSize: 13,
                 fontWeight: 600,
-                ...dropIndicatorStyle(rowId),
               }}
             >
               <span {...dragHandleProps(rowId)} style={{ display: "flex", flex: "none", cursor: "grab", color: "var(--cs-text-muted)" }} title="Drag to reorder">
                 <GripVertical size={13} />
               </span>
+              <button
+                className="cs-icon-btn"
+                style={iconBtnStyle}
+                title={isCollapsed ? "Expand group" : "Collapse group"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleCollapsed(groupId);
+                }}
+              >
+                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+              </button>
               <Folder size={14} color="var(--cs-text-muted)" style={{ flex: "none" }} />
               {isEditing ? (
                 <input
@@ -325,7 +347,7 @@ export function LayerPanel({ width }: { width: number }) {
               </button>
             </div>
 
-            {members.map((layer, mi) => {
+            {!isCollapsed && members.map((layer, mi) => {
               const isSelected = selectedLayerIds.includes(layer.id);
               const TypeIcon = TYPE_ICONS[layer.type];
               return (

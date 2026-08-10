@@ -26,6 +26,24 @@ function cloneLayerWithOffset(layer: Layer, offsetMm: number): Layer {
   return { ...layer, id: crypto.randomUUID(), name: `${layer.name} copy`, x: layer.x + offsetMm, y: layer.y + offsetMm };
 }
 
+/** Where a newly added single layer goes in z-order: directly above (in
+ * front of) the topmost currently-selected layer, rather than always at
+ * the very top of the whole stack — lets "add a text layer" while a
+ * specific background image is selected land right above just that
+ * image, not above everything else already stacked on top of it. Falls
+ * back to appending at the very top when nothing's selected (the only
+ * behavior before this existed). Purely a z-order position — the new
+ * layer doesn't inherit the reference layer's groupId, even if it's
+ * grouped. */
+function insertAboveSelection(layers: Layer[], newLayer: Layer, selectedIds: string[]): Layer[] {
+  let topIndex = -1;
+  layers.forEach((l, i) => {
+    if (selectedIds.includes(l.id)) topIndex = i;
+  });
+  if (topIndex === -1) return [...layers, newLayer];
+  return [...layers.slice(0, topIndex + 1), newLayer, ...layers.slice(topIndex + 1)];
+}
+
 /** Tags every layer whose id is in `layerIds` with `groupId`, first moving
  * them contiguous in z-order (near the topmost original member's
  * position) if they aren't already — see LayerBase.groupId's doc comment
@@ -83,8 +101,14 @@ export interface DesignState {
   setSelection: (ids: string[]) => void;
   clearSelection: () => void;
 
+  /** Inserts one new layer directly above the topmost currently-selected
+   * layer in z-order (see insertAboveSelection), or at the very top of
+   * the stack if nothing's selected. Used by every "add a single layer"
+   * toolbar action (Frame/Text/Shape/Image, the rarity dropdown). */
   addLayer: (layer: Layer) => void;
-  /** Adds multiple layers as a single undo step (e.g. "add all text fields"). */
+  /** Adds multiple layers as a single undo step (e.g. "add all text
+   * fields") — always appended at the very top, unlike addLayer;
+   * multi-layer adds aren't "insert above the selection" today. */
   addLayers: (layers: Layer[]) => void;
   /** Adds new layers and, in the same undo step, groups them (optionally
    * together with already-existing layers, e.g. a rarity symbol added on
@@ -190,7 +214,7 @@ export function createDesignStore(initialDesign: Design) {
       set((state) => ({
         past: [...state.past, state.design].slice(-HISTORY_LIMIT),
         future: [],
-        design: { ...state.design, layers: [...state.design.layers, layer] },
+        design: { ...state.design, layers: insertAboveSelection(state.design.layers, layer, state.selectedLayerIds) },
         selectedLayerIds: [layer.id],
       })),
 
