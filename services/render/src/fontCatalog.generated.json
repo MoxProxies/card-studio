@@ -1,5 +1,27 @@
 [
   {
+    "family": "Beleren",
+    "weights": [
+      {
+        "weight": 700,
+        "style": "normal",
+        "fileName": "700.woff",
+        "format": "woff"
+      }
+    ]
+  },
+  {
+    "family": "Gotham",
+    "weights": [
+      {
+        "weight": 400,
+        "style": "normal",
+        "fileName": "400.otf",
+        "format": "opentype"
+      }
+    ]
+  },
+  {
     "family": "Inter",
     "weights": [
       {
@@ -25,6 +47,28 @@
         "style": "normal",
         "fileName": "700.woff2",
         "format": "woff2"
+      }
+    ]
+  },
+  {
+    "family": "MPlantin",
+    "weights": [
+      {
+        "weight": 400,
+        "style": "normal",
+        "fileName": "400.ttf",
+        "format": "truetype"
+      }
+    ]
+  },
+  {
+    "family": "Proxyglyph",
+    "weights": [
+      {
+        "weight": 400,
+        "style": "normal",
+        "fileName": "400.ttf",
+        "format": "truetype"
       }
     ]
   }

@@ -9,4 +9,4 @@
  * available on visitors' systems — otherwise it silently falls back to
  * the browser default and print output won't match what font-library/
  * promises. */
-export const DEFAULT_FONT_FAMILY = "Inter";
+export const DEFAULT_FONT_FAMILY = "Beleren";

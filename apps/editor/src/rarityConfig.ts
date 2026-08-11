@@ -4,7 +4,7 @@
  * uses. Real MTG cards sit the symbol at the right end of the type line;
  * hand-tune this if a frame's type line sits somewhere else.
  */
-export const RARITY_SYMBOL_BOX = { x: 52.5, y: 50.4, width: 5.5, height: 5.5 };
+export const RARITY_SYMBOL_BOX = { x: 53.5, y: 49.9, width: 4.1, height: 4.1 };
 
 /** Fixed, well-known id for the single rarity-symbol layer a design can
  * have — lets the toolbar dropdown find-or-create/update it directly by
@@ -26,5 +26,5 @@ export const RARITY_DISPLAY_ORDER = ["common", "uncommon", "rare", "mythic"];
  * are independent (see schema.ts's LayerBase doc comments); both true
  * here just reflects that this one layer is meant to be doubly
  * protected by default. */
-export const RARITY_DEFAULT_LOCKED = true;
-export const RARITY_DEFAULT_CONTENT_LOCKED = true;
+export const RARITY_DEFAULT_LOCKED = false;
+export const RARITY_DEFAULT_CONTENT_LOCKED = false;
