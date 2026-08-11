@@ -131,6 +131,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
     id: newId(),
     name: template.label,
     type: "text",
+    fieldId: template.id,
     content: template.defaultContent,
     fontFamily: template.fontFamily ?? DEFAULT_FONT_FAMILY,
     fontSizePt: template.fontSizePt,

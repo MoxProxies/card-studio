@@ -1132,31 +1132,69 @@ are held to the boundary.
 
 ## How this is meant to connect to moxproxies-website
 
-Not implemented yet, but the shape of it:
+**No API key, and the embed itself needs no auth at all.** `card-studio-embed.js`
+is a static, self-contained bundle (see "Building the embed bundle" above) —
+moxproxies-website builds it same-origin (its own Vite pipeline copies/serves
+the file) and drops a `<card-studio-editor>` element into a normal
+session-authenticated Blade/Livewire page, the same as any other page asset.
+There's nothing secret inside it to protect with a key, and a browser-embedded
+key can't be secret anyway. The widget's whole surface is `initial-design`,
+`can-edit-locked-content`, `.getDesign()`, `.setEntitlements()`, and the
+`design-change` event (see `embed.ts`) — it never makes a network call of its
+own. **The one earlier idea in this section that turned out unnecessary:
+passing a short-lived token *into* the widget.** It isn't needed — the host
+page itself is already an authenticated moxproxies-website page with its own
+session/CSRF token, so it's the host page's own JS (not the widget) that
+calls back to moxproxies-website's own endpoints on save/publish/buy, using
+whatever auth it already has. The widget stays completely tokenless.
+
+The actual pipeline, as it's meant to be built on the moxproxies-website side
+(nothing here yet — see [Not built yet](#not-built-yet) — this documents the
+target shape so both sides agree on the contract):
 
 - moxproxies-website already has a `CardDesign` model
-  (`app/Models/CardDesign.php`) driving a *prompt/field-based* AI-art
-  card pipeline (`GenerateCardImageForCardDesign` job). This project is
-  a different, visual-editor path to producing a card image — the two
-  can coexist. A finished Card Studio design would populate
-  `CardDesign.generated_url` (or a new column) once rendered, rather
-  than replacing the existing model.
-- Card Studio should treat moxproxies-website as its identity provider:
-  the host page passes a short-lived token down to the embedded
-  element (e.g. as an attribute or via a JS setter) so API calls from
-  the widget (save design, upload art, request a print-quality render)
-  are attributed to the logged-in user without Card Studio running its
-  own auth system.
-- `sourceCardDesignId` already exists on `Design` (see schema) as the
-  join point back to a `CardDesign` row.
-- The one piece of premium/entitlement plumbing that *does* exist today
-  is `Entitlements.canEditLockedContent` (see [Field
-  locking](#field-locking)) — a plain boolean the host page passes down
-  via the `can-edit-locked-content` attribute or `.setEntitlements()`.
-  When a real premium check exists on moxproxies-website, computing that
-  boolean from the logged-in user's subscription and passing it in is
-  the entire integration; nothing on the Card Studio side needs to
-  change.
+  (`app/Models/CardDesign.php`) driving a *prompt/field-based* AI-art card
+  pipeline (`GenerateCardImageForCardDesign` job) — flat MTG columns
+  (`name`, `mana_cost`, `rules_text`, `rarity`, ...), no scene JSON. Card
+  Studio is a different, visual-editor path to producing a card image; the
+  two coexist on the same model rather than replacing it. A `CardDesign` row
+  gains a JSON column (e.g. `studio_design`) holding the raw `Design` this
+  app produces, so a design can be reopened for further editing later, and
+  the existing (currently-unpopulated) `generated_url` column is what a
+  render of it fills in.
+- The host page's JS calls `getDesign()` and `POST`s the raw `Design` JSON
+  (plus a `visibility`/`card_design_id` if editing an existing one) to a
+  moxproxies-website endpoint, using the page's own session/CSRF — no
+  metadata object needs to be assembled separately. `TextLayer.fieldId` (the
+  `text-template-library/` field id — `"title"`, `"rules"`, `"artist"`,
+  etc. — see schema.ts) is what lets that endpoint reliably map layers back
+  onto `CardDesign`'s flat columns for search/display, instead of guessing
+  from a layer's free-text `name`. Rarity and frame category are already
+  unambiguous either way — `RARITY_LAYER_ID`'s `assetId` and the Frame
+  layer's `assetId`/category are stable catalog ids, not guesses.
+- That endpoint creates/updates the `CardDesign` row, then dispatches a
+  queued job (mirroring `GenerateCardImageForCardDesign`'s own
+  `generation_status: queued → processing → completed/failed` pattern) that
+  calls `services/render`'s `POST /render` **server-to-server** — Laravel to
+  this service directly, never the browser — and stores the resulting PNG.
+  `services/render` accepts an optional shared secret for exactly this call
+  (`RENDER_SHARED_SECRET` env var + an `X-Render-Secret` header — see
+  `server.ts`); unset by default for local dev, since this is meant to run
+  on a private network/localhost relative to the Laravel app ("host it on
+  the same server"), not be publicly reachable at all. Buying a card is the
+  same flow, plus mapping the resulting `CardDesign` onto a cart line —
+  still an open product decision on the moxproxies-website side (what SKU a
+  custom design attaches to), not something this repo has an opinion on.
+- `sourceCardDesignId` already exists on `Design` (see schema) as the join
+  point back to a `CardDesign` row, for the reverse direction (loading an
+  existing design back into the editor).
+- The one piece of premium/entitlement plumbing that *does* exist today is
+  `Entitlements.canEditLockedContent` (see [Field locking](#field-locking))
+  — a plain boolean the host page passes down via the
+  `can-edit-locked-content` attribute or `.setEntitlements()`. When a real
+  premium check exists on moxproxies-website, computing that boolean from
+  the logged-in user's subscription and passing it in is the entire
+  integration; nothing on the Card Studio side needs to change.
 
 ## Not built yet
 
@@ -1172,7 +1210,10 @@ Not implemented yet, but the shape of it:
   yet. Panel widths and the safe-area/bleed-preview toggles are still
   pure in-memory view state either way (not part of a saved design) and
   reset on reload regardless.
-- Auth/session handoff from moxproxies-website
-- An API layer in front of `services/render` (it's currently a bare
-  render endpoint, no auth, no storage of results)
-- Deploy config for either app
+- The moxproxies-website side of the integration described in [How this is
+  meant to connect](#how-this-is-meant-to-connect-to-moxproxies-website) —
+  the `studio_design` column, the submission endpoint, the render-triggering
+  job, and the actual embed page — none of that lives in this repo, so
+  none of it exists yet from Card Studio's side either.
+- Deploy config for either app (including actually running
+  `services/render` somewhere reachable from moxproxies-website's backend)

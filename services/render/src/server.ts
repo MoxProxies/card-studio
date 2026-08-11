@@ -7,9 +7,24 @@ registerEmbeddedFonts();
 
 const app = Fastify({ logger: true });
 
+// Server-to-server only — this is meant to be called by a trusted backend
+// (e.g. moxproxies-website's Laravel app), never reachable from a browser
+// directly, so there's no per-user auth concept here at all, just one
+// shared secret proving the caller is that backend. RENDER_SHARED_SECRET
+// unset (the default for local dev/CI) skips the check entirely; set it
+// in any environment where this service is reachable from outside a
+// trusted private network, since /render otherwise happily rasterizes
+// arbitrary attacker-supplied Design JSON for free (a cheap DoS lever)
+// with no other gate in front of it.
+const sharedSecret = process.env.RENDER_SHARED_SECRET;
+
 app.get("/health", async () => ({ status: "ok" }));
 
 app.post("/render", async (request, reply) => {
+  if (sharedSecret && request.headers["x-render-secret"] !== sharedSecret) {
+    return reply.status(401).send({ error: "Unauthorized" });
+  }
+
   const body = request.body as { design?: unknown; dpi?: number };
   const parsed = Design.safeParse(body.design);
   if (!parsed.success) {

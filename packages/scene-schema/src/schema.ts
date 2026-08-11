@@ -84,6 +84,20 @@ export const ImageLayer = LayerBase.extend({
 export const TextLayer = LayerBase.extend({
   type: z.literal("text"),
   content: z.string(),
+  /** The text-template-library/ field id (e.g. "title", "rules",
+   * "artist") this layer was created from — see TextFieldTemplate.id in
+   * apps/editor/src/textTemplates.ts. Unset for a layer added by some
+   * other path (a plain "Add Text", or one whose template has since been
+   * hand-edited past recognition) — there's deliberately no fallback to
+   * `name` for this, since `name` is a free-text label a user can retype
+   * to anything. An embedding host that needs to know "which MTG field is
+   * this" (e.g. moxproxies-website mapping a saved Design back onto its
+   * own CardDesign columns for search/display) should key off this and
+   * treat a missing value as "not a recognized standard field," not guess
+   * from position or label text. Optional (no `.default()`) so it's
+   * opt-in for consumers and doesn't force every existing raw Layer
+   * literal in Toolbar.tsx to set it, unlike locked/contentLocked above. */
+  fieldId: z.string().optional(),
   fontFamily: z.string().default("Inter"),
   fontSizePt: z.number().positive().default(12),
   /** Floor for the "shrink" search below — see maxFontSizePt. Unset falls
