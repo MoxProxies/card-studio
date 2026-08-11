@@ -116,7 +116,7 @@ export function CanvasStage({ stageRef }: { stageRef: RefObject<Konva.Stage> }) 
   // space+drag never fights with Konva's own node-dragging underneath it.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !isTypingTarget(e.target)) setSpaceHeld(true);
+      if (e.code === "Space" && !isTypingTarget(e)) setSpaceHeld(true);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") setSpaceHeld(false);

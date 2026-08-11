@@ -18,7 +18,7 @@ export function useKeyboardShortcuts() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return;
+      if (isTypingTarget(e)) return;
       const meta = e.metaKey || e.ctrlKey;
 
       if (meta && e.key.toLowerCase() === "z") {

@@ -21,7 +21,21 @@ export function TextTemplateMenu({ templates, onAdd, onAddAll }: TextTemplateMen
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      // e.target, not composedPath()[0]: inside the embed (rendered into a
+      // shadow root — see embed.ts), a listener attached to window sits
+      // *outside* the shadow boundary, so any event that originated inside
+      // it gets retargeted — e.target becomes the shadow host
+      // (<card-studio-editor> itself), never the actual button that was
+      // clicked. rootRef.current.contains(e.target) is then always false,
+      // even for a click on a menu item, so the menu closed itself (on
+      // mousedown, before the click that would've fired onAdd/onAddAll)
+      // on every single interaction — "Add all fields" silently doing
+      // nothing, only inside the embed, never in the standalone app (no
+      // shadow root there, so e.target was never retargeted to begin
+      // with). composedPath()[0] is the real innermost target regardless
+      // of shadow boundaries, exactly what this check needs.
+      const target = (e.composedPath()[0] ?? e.target) as Node;
+      if (rootRef.current && !rootRef.current.contains(target)) setOpen(false);
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);

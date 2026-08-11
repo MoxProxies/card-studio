@@ -1082,7 +1082,7 @@ fix (Vite's `base` config), not just changing the string.
   the bundle's URL); that's an acceptable trade here since both sites
   are ours.
 
-  Two pitfalls specific to this shadow-DOM/library-mode build, both
+  Several pitfalls specific to this shadow-DOM/library-mode build, all
   found by actually loading the built bundle in a plain host page rather
   than trusting the standalone dev server:
   - CSS custom properties are defined on `.cs-root`, not `:root` —
@@ -1129,6 +1129,36 @@ fix (Vite's `base` config), not just changing the string.
     moxproxies-website's actual layout) rather than a bare directory
     root — the standalone dev server alone can't catch this class of
     bug, since it always happens to serve from its own root.
+  - Every `window`-level listener that inspected `e.target` broke inside
+    the embed specifically: a listener attached *outside* a shadow
+    boundary sees `e.target` retargeted to the shadow host
+    (`<card-studio-editor>` itself) for any event that originated
+    *inside* it, never the actual inner element — a standard, easy-to-
+    forget part of the shadow DOM spec. Two real bugs from this, both
+    only reproducible inside the embed (never the standalone app, which
+    has no shadow root to retarget across): `TextTemplateMenu.tsx`'s
+    click-outside-to-close handler treated *every* click inside the
+    menu, including on "Add all fields" itself, as "outside" and closed
+    the menu on `mousedown` — before the `click` that would've fired
+    `onAdd`/`onAddAll` ever got a chance to run, so every field-add
+    button silently did nothing. `isTypingTarget.ts` (backing both
+    `useKeyboardShortcuts.ts` and `CanvasStage.tsx`'s space-to-pan) never
+    recognized an INPUT/TEXTAREA as a typing target, so global shortcuts
+    fired *while typing* — Delete deleting the selected layer instead of
+    a character, Ctrl+Z undoing instead of the browser's own undo. Fixed
+    by reading `e.composedPath()[0]` instead of `e.target` in both —
+    `composedPath()` returns the real innermost target regardless of
+    shadow boundaries, exactly the case `e.target`'s retargeting exists
+    to prevent leaking to outside listeners. `isTypingTarget` now takes
+    the whole event instead of a bare target for this reason. Every
+    other `window`-level listener in the app was audited against this
+    same question (does it read `e.target`, and does that determination
+    need to be *correct*, not just non-throwing) — the rest either don't
+    inspect the target at all (`ResizeHandle.tsx`'s drag, every modal's
+    Escape-to-close) or are safe for an unrelated reason (a backdrop's
+    own `onMouseDown` via JSX, which React delivers correctly since both
+    the listener and the target live inside the same shadow tree —
+    retargeting only bites listeners *outside* the boundary).
 
 **A `fit: "cover"` image's selection handles used to balloon out past the
 card's edges whenever the source image's aspect ratio was far from its
