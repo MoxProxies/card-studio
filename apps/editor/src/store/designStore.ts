@@ -90,6 +90,18 @@ export interface DesignState {
    * via setEntitlements (embed.ts's `setEntitlements()` method), e.g.
    * once an async auth check resolves after mount. */
   entitlements: Entitlements;
+  /** True when the host page already provides its own save/persistence
+   * UI (e.g. moxproxies-website's own "Save" button, which POSTs to its
+   * own backend — see card-studio's README, "How this is meant to
+   * connect to moxproxies-website") and Card Studio's own localStorage-
+   * based "Designs" button (designStorage.ts/DesignLibraryModal.tsx)
+   * should stay hidden rather than sit next to it as a second, easily
+   * confused "save" that silently only persists to that one browser.
+   * Set once at store creation from embed.ts's `hide-local-design-
+   * library` attribute; false (the toolbar button shows, as it always
+   * has) for the standalone dev entry point (main.tsx), which has no
+   * other persistence to defer to. */
+  hideLocalDesignLibrary: boolean;
   /** Canvas view transform (view-only, not part of the design or undo
    * history). zoom 1 = the editor's native EDITOR_DPI resolution; pan is in
    * screen pixels, applied to the pan/zoom Group, not the Stage itself. */
@@ -176,7 +188,11 @@ export interface DesignState {
   redo: () => void;
 }
 
-export function createDesignStore(initialDesign: Design, initialEntitlements: Entitlements = DEFAULT_ENTITLEMENTS) {
+export function createDesignStore(
+  initialDesign: Design,
+  initialEntitlements: Entitlements = DEFAULT_ENTITLEMENTS,
+  hideLocalDesignLibrary: boolean = false
+) {
   return create<DesignState>((set) => ({
     design: initialDesign,
     past: [],
@@ -186,6 +202,7 @@ export function createDesignStore(initialDesign: Design, initialEntitlements: En
     showSafeArea: true,
     showBleed: true,
     entitlements: initialEntitlements,
+    hideLocalDesignLibrary,
     zoom: 1,
     panX: 0,
     panY: 0,

@@ -46,6 +46,7 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
   const renameDesign = useDesignStore((s) => s.renameDesign);
   const loadDesign = useDesignStore((s) => s.loadDesign);
   const entitlements = useDesignStore((s) => s.entitlements);
+  const hideLocalDesignLibrary = useDesignStore((s) => s.hideLocalDesignLibrary);
   const zoom = useDesignStore((s) => s.zoom);
   const panX = useDesignStore((s) => s.panX);
   const panY = useDesignStore((s) => s.panY);
@@ -520,9 +521,11 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
         Cut {fmt(design.size.cutWidthMm)}×{fmt(design.size.cutHeightMm)}mm · bleed to {fmt(design.size.widthMm)}×
         {fmt(design.size.heightMm)}mm
       </span>
-      <button className="cs-btn" onClick={() => setShowDesignLibrary(true)} title="Save or load a design">
-        <Save size={16} /> Designs
-      </button>
+      {!hideLocalDesignLibrary && (
+        <button className="cs-btn" onClick={() => setShowDesignLibrary(true)} title="Save or load a design">
+          <Save size={16} /> Designs
+        </button>
+      )}
       <button className="cs-btn" onClick={handleExport} title={`Export PNG at ${PRINT_DPI} DPI`}>
         <Download size={16} /> Export ({PRINT_DPI} DPI)
       </button>

@@ -19,7 +19,7 @@ import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
  *
  * Usage from the host page:
  *   <script type="module" src="https://studio.moxproxies.com/embed/card-studio-embed.js"></script>
- *   <card-studio-editor initial-design='{...}' can-edit-locked-content></card-studio-editor>
+ *   <card-studio-editor initial-design='{...}' can-edit-locked-content hide-local-design-library></card-studio-editor>
  *
  * The element dispatches a bubbling, composed "design-change" CustomEvent
  * (detail: the current Design JSON) on every edit, so the host page can
@@ -42,6 +42,15 @@ import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
  * resolves. Computing that boolean from an actual moxproxies-website
  * session/subscription is entirely the host page's job; this element
  * never sees a token or makes an auth call of its own.
+ *
+ * `hide-local-design-library` (boolean attribute, read once at mount,
+ * present = true): hides the toolbar's own "Designs" button —
+ * designStorage.ts's localStorage-backed save/load, which predates this
+ * embed and has nothing to do with the host's own persistence. Set this
+ * whenever the host page provides its own save UI (as moxproxies-website
+ * now does), so there's exactly one "Save" a user can find, not two that
+ * quietly do different things (one to the host's backend, one to just
+ * that browser's localStorage).
  */
 export class CardStudioEditorElement extends HTMLElement {
   #root: Root | null = null;
@@ -66,7 +75,7 @@ export class CardStudioEditorElement extends HTMLElement {
 
     const initialDesign = this.#readInitialDesign();
     const initialEntitlements = this.#readInitialEntitlements();
-    this.#store = createDesignStore(initialDesign, initialEntitlements);
+    this.#store = createDesignStore(initialDesign, initialEntitlements, this.hasAttribute("hide-local-design-library"));
     this.#store.subscribe((state) => {
       this.dispatchEvent(
         new CustomEvent("design-change", { detail: state.design, bubbles: true, composed: true })

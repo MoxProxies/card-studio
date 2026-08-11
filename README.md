@@ -712,6 +712,21 @@ different design, or starting a blank one, clears undo/redo history
 (`loadDesign` in `designStore.ts`), so there's nothing to Ctrl/Cmd+Z
 back to once you've navigated away from what you had.
 
+**moxproxies-website's real integration ended up bypassing this
+interface entirely, rather than swapping its implementation as
+originally planned above.** The host page already has everything it
+needs from `.getDesign()`/the `design-change` event (see [How this is
+meant to connect](#how-this-is-meant-to-connect-to-moxproxies-website))
+and posts straight to its own backend — there was never a need for a
+`CardDesign`-backed `DesignStorage` implementation living inside this
+app. What *is* needed: hiding the toolbar's own "Designs" button
+(`localStorageDesignStorage`, still exactly as described above) so it
+doesn't sit next to the host's real "Save" button as a second one that
+silently only persists to that browser — `<card-studio-editor
+hide-local-design-library>` (embed.ts) does that, defaulting to shown
+(unchanged) for the standalone dev entry point, which has nothing else
+to defer to.
+
 ## Field locking
 
 Every layer carries two independent booleans (`LayerBase.locked` /
