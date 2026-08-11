@@ -1101,6 +1101,34 @@ fix (Vite's `base` config), not just changing the string.
     which is, unhelpfully, exactly the environment it's loaded into.
     Fixing it also let Rollup dead-code-eliminate React's whole dev-mode
     branch, dropping the bundle from ~1.6MB to ~750KB.
+  - Every frame/font/rarity/symbol asset URL was hardcoded root-absolute
+    (`/frames/...`, `/fonts/...`, `/rarity/...`, `/symbols/...` —
+    `frameAssets.ts`, `rarityAssets.ts`, `symbolAssets.ts`,
+    `fonts.generated.css`), correct only when this app is served from its
+    own domain root. The standalone build always is; the embed isn't —
+    moxproxies-website serves `card-studio-embed.js` from its own
+    `public/vendor/card-studio/`, not the domain root — so every one of
+    those requests 404'd there: frames and rarity/mana symbols silently
+    failed to render, and every embedded font fell back to the browser
+    default. Fixed with `assetBase.ts`'s `ASSET_BASE` (default `"/"`,
+    unchanged for the standalone build) — `embed.ts` sets it once, at
+    module load, from `import.meta.url`'s own containing directory
+    (portable regardless of what subpath a host serves the script from,
+    since the `fonts/`/`frames/`/`rarity/`/`symbols/` directories are
+    always copied as true siblings of `card-studio-embed.js` — see
+    `vite.embed.config.ts`), and rewrites `fonts.generated.css`'s
+    `/fonts/` references directly (plain generated CSS text can't read a
+    JS variable). Two call sites — `FrameLibraryModal.tsx`'s and
+    `PropertiesPanel.tsx`'s frame thumbnail `<img>`s — had their own
+    inline `` `/frames/${category}/${fileName}` `` construction instead
+    of going through `getFrameAssetUrl`, so they needed the same fix
+    applied by hand; every other asset reference in the app already went
+    through the three `getXAssetUrl` helpers this ASSET_BASE change
+    covers automatically. Verified by building the embed bundle and
+    serving it from a nested path (`/vendor/card-studio/`, matching
+    moxproxies-website's actual layout) rather than a bare directory
+    root — the standalone dev server alone can't catch this class of
+    bug, since it always happens to serve from its own root.
 
 **A `fit: "cover"` image's selection handles used to balloon out past the
 card's edges whenever the source image's aspect ratio was far from its

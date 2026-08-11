@@ -1,4 +1,5 @@
 import generatedCatalog from "./frameCatalog.generated.json";
+import { ASSET_BASE } from "./assetBase";
 
 export interface FrameAsset {
   id: string;
@@ -26,5 +27,5 @@ export function getFrameAsset(assetId: string): FrameAsset | undefined {
  * the flat-tint placeholder in that case. */
 export function getFrameAssetUrl(assetId: string): string | undefined {
   const asset = getFrameAsset(assetId);
-  return asset ? `/frames/${asset.category}/${asset.fileName}` : undefined;
+  return asset ? `${ASSET_BASE}frames/${asset.category}/${asset.fileName}` : undefined;
 }

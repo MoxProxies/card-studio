@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import type { Layer } from "@card-studio/scene-schema";
 import { useDesignStore } from "../store/DesignProvider";
-import { getFrameAsset } from "../frameAssets";
+import { getFrameAsset, getFrameAssetUrl } from "../frameAssets";
 import { EMBEDDED_FONT_FAMILIES, SYSTEM_FONT_FALLBACKS } from "../fontAssets";
 import { FrameLibraryModal } from "./FrameLibraryModal";
 
@@ -234,7 +234,7 @@ export function PropertiesPanel({ width }: { width: number }) {
                   const asset = getFrameAsset(layer.assetId);
                   return asset ? (
                     <img
-                      src={`/frames/${asset.category}/${asset.fileName}`}
+                      src={getFrameAssetUrl(asset.id)}
                       alt={asset.name}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />

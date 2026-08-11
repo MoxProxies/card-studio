@@ -1,4 +1,5 @@
 import generatedCatalog from "./rarityCatalog.generated.json";
+import { ASSET_BASE } from "./assetBase";
 
 export interface RarityAsset {
   id: string;
@@ -19,5 +20,5 @@ export function getRarityAsset(id: string): RarityAsset | undefined {
  * Undefined for unknown ids. */
 export function getRarityAssetUrl(id: string): string | undefined {
   const asset = getRarityAsset(id);
-  return asset ? `/rarity/${asset.fileName}` : undefined;
+  return asset ? `${ASSET_BASE}rarity/${asset.fileName}` : undefined;
 }

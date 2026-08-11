@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Search } from "lucide-react";
-import { FRAME_ASSETS, FRAME_CATEGORIES } from "../frameAssets";
+import { FRAME_ASSETS, FRAME_CATEGORIES, getFrameAssetUrl } from "../frameAssets";
 
 interface FrameLibraryModalProps {
   onSelect: (assetId: string) => void;
@@ -102,7 +102,7 @@ export function FrameLibraryModal({ onSelect, onClose }: FrameLibraryModalProps)
                 >
                   <div style={{ aspectRatio: "63 / 88", overflow: "hidden", borderRadius: 4, background: "var(--cs-surface-soft)" }}>
                     <img
-                      src={`/frames/${asset.category}/${asset.fileName}`}
+                      src={getFrameAssetUrl(asset.id)}
                       alt={asset.name}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                     />

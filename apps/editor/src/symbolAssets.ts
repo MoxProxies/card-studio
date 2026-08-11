@@ -1,4 +1,5 @@
 import generatedCatalog from "./symbolCatalog.generated.json";
+import { ASSET_BASE } from "./assetBase";
 
 export interface SymbolAsset {
   id: string;
@@ -25,7 +26,7 @@ export function getSymbolAsset(token: string): SymbolAsset | undefined {
  * for a token with no matching symbol-library asset. */
 export function getSymbolAssetUrl(token: string): string | undefined {
   const asset = getSymbolAsset(token);
-  return asset ? `/symbols/${asset.fileName}` : undefined;
+  return asset ? `${ASSET_BASE}symbols/${asset.fileName}` : undefined;
 }
 
 /** A generic mana token — {0}, {1}, {2}, ... any non-negative integer, or

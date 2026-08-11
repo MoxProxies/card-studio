@@ -13,6 +13,30 @@ import { App } from "./App";
 import styles from "./styles.css?inline";
 import fontFaces from "./fonts.generated.css?inline";
 import { preloadEmbeddedFonts } from "./loadEmbeddedFonts";
+import { setAssetBase } from "./assetBase";
+
+// frameAssets.ts/rarityAssets.ts/symbolAssets.ts build their URLs
+// ("/frames/...", "/rarity/...", "/symbols/...") assuming this app is
+// served from its own domain root — true for the standalone build, not
+// for this one: moxproxies-website serves card-studio-embed.js from its
+// own public/vendor/card-studio/, not the domain root, so those paths
+// 404 there. import.meta.url is this module's own URL wherever it was
+// actually loaded from, so its containing directory is exactly where
+// the sibling fonts/frames/rarity/symbols/ directories (copied
+// alongside this file at build time — see vite.embed.config.ts) live,
+// regardless of what subpath the host serves it from. Runs once at
+// module load, before connectedCallback (and therefore before any of
+// those modules ever construct a URL).
+// Vite warns that it can't resolve this at build time — correct, and the
+// whole point: it has to stay a runtime expression, evaluated wherever
+// the host page actually loaded this script from, not baked in here.
+const ASSET_BASE = new URL(".", import.meta.url).href;
+setAssetBase(ASSET_BASE);
+// fonts.generated.css is plain generated CSS text, not JS — it can't
+// read assetBase.ts's exported variable, so its "/fonts/..." references
+// get rewritten directly here, the one place this raw CSS string is
+// actually used (injected into the shadow root below).
+const embeddedFontFaces = fontFaces.replaceAll('url("/fonts/', `url("${ASSET_BASE}fonts/`);
 
 /**
  * <card-studio-editor> — the integration surface for moxproxies-website.
@@ -61,7 +85,7 @@ export class CardStudioEditorElement extends HTMLElement {
 
     const shadow = this.shadowRoot ?? this.attachShadow({ mode: "open" });
     const styleEl = document.createElement("style");
-    styleEl.textContent = `${styles}\n${fontFaces}`;
+    styleEl.textContent = `${styles}\n${embeddedFontFaces}`;
     shadow.appendChild(styleEl);
     // @font-face registration is document-global even when declared inside
     // a shadow root's stylesheet — safe to preload once the <style> above
