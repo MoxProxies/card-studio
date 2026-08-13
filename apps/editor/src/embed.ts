@@ -50,6 +50,17 @@ const embeddedFontFaces = fontFaces.replaceAll('url("/fonts/', `url("${ASSET_BAS
  * autosave or enable a "Save design" button without polling. It also
  * exposes `.getDesign()` for imperative reads (e.g. right before checkout).
  *
+ * It also dispatches a bubbling, composed "fullscreen-change" CustomEvent
+ * (detail: `{ fullscreen: boolean }`) whenever the toolbar's fullscreen/
+ * lightbox toggle fires (App.tsx). The lightbox already sets an extremely
+ * high z-index internally, but that only wins within whatever stacking
+ * context the host page put this element in — a host with, say, a fixed/
+ * sticky nav bar in a *different* stacking context with its own z-index
+ * can still end up drawing that nav bar on top of the lightbox regardless.
+ * Listen for this event and react on the host side (lower the nav's own
+ * z-index, hide it, ...) for exactly as long as `detail.fullscreen` is
+ * true.
+ *
  * Auth/ownership are intentionally out of scope here: this element only
  * edits scene JSON in memory. Persisting a design against a logged-in
  * moxproxies-website user, uploading art, and requesting a print-quality

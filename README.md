@@ -1214,6 +1214,17 @@ fix (Vite's `base` config), not just changing the string.
   the bundle's URL); that's an acceptable trade here since both sites
   are ours.
 
+  It also dispatches `fullscreen-change` (detail: `{ fullscreen: boolean
+  }`) whenever the toolbar's lightbox toggle fires — see App.tsx's own
+  doc comment on why this exists: the lightbox's own extremely high
+  z-index only wins *within* whatever stacking context the host wraps
+  this element in, so a host with, say, a sticky top nav in a sibling
+  stacking context with its own z-index can still end up drawing that
+  nav on top of the lightbox regardless. moxproxies-website's own
+  `resources/js/card-studio-editor.js` listens for this and temporarily
+  lowers `#navbar`'s z-index for exactly as long as `detail.fullscreen`
+  is true.
+
   Several pitfalls specific to this shadow-DOM/library-mode build, all
   found by actually loading the built bundle in a plain host page rather
   than trusting the standalone dev server:

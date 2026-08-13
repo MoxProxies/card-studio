@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { CanvasStage } from "./components/CanvasStage";
 import { Toolbar } from "./components/Toolbar";
@@ -31,6 +31,7 @@ const clamp = (value: number) => Math.min(PANEL_MAX_WIDTH, Math.max(PANEL_MIN_WI
 
 export function App() {
   const stageRef = useRef<Konva.Stage>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [layerPanelWidth, setLayerPanelWidth] = useState(DEFAULT_LAYER_PANEL_WIDTH);
   const [propertiesPanelWidth, setPropertiesPanelWidth] = useState(DEFAULT_PROPERTIES_PANEL_WIDTH);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -40,8 +41,29 @@ export function App() {
     useCallback(() => setIsFullscreen(false), [])
   );
 
+  // Lets the host page react to the lightbox toggling — most importantly,
+  // temporarily ducking its own fixed/sticky nav bar out of the way.
+  // FULLSCREEN_Z_INDEX above only wins *within* whatever stacking context
+  // the host happens to wrap this element in (e.g. a `position: relative;
+  // z-index: 20` container) — it says nothing about how that container
+  // itself compares to a sibling like a nav bar sitting in a *different*
+  // stacking context with its own, possibly higher, z-index, so the
+  // lightbox can still end up underneath one despite this z-index. This
+  // event's `detail.fullscreen` is the host's cue to sort that out on its
+  // own end however it needs to (lower the nav's z-index, hide it, ...).
+  // Dispatched on this shadow-tree node with composed:true so it crosses
+  // the shadow boundary — event.target is retargeted to
+  // <card-studio-editor> itself for any listener outside this tree, same
+  // as embed.ts's own "design-change".
+  useEffect(() => {
+    rootRef.current?.dispatchEvent(
+      new CustomEvent("fullscreen-change", { detail: { fullscreen: isFullscreen }, bubbles: true, composed: true })
+    );
+  }, [isFullscreen]);
+
   return (
     <div
+      ref={rootRef}
       className="cs-root"
       style={{
         display: "flex",
