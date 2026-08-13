@@ -32,15 +32,17 @@ export interface TextFieldTemplate {
    * governs the digit(s) drawn inside a generic-mana-cost circle (e.g.
    * the "2" in {2}) — that's real text too, not part of the icon. Actual
    * mana/tap/etc. symbols are library images, not glyphs, so no font
-   * applies to them at all; see symbolScale below for sizing those. */
+   * applies to them at all; see manaDigitScale below for sizing those. */
   fontFamily?: string;
-  /** Scales inline {token} symbols (mana symbols, {T}, the generic-mana
-   * circle, ...) relative to fontSizePt — e.g. 1.15 renders them 15%
-   * bigger than the surrounding text, useful for a mana-cost field
-   * where the icons often read better a little larger than the digits
-   * next to them. See TextLayer.symbolScale in schema.ts for exactly
-   * how it's applied. Omit for the default 1:1 sizing. */
-  symbolScale?: number;
+  /** Scales the digit drawn inside a generic-mana-cost circle relative
+   * to the circle's own fixed size — e.g. 1.15 renders a 15% bigger
+   * digit with less visible padding inside the same bubble. Doesn't
+   * touch the circle's size, or real symbol-library icons (colored
+   * mana, {T}, hybrids, ...) at all — those are flat artwork with the
+   * letter baked in, nothing to scale independently. See
+   * TextLayer.manaDigitScale in schema.ts for exactly how it's
+   * applied. Omit for the default 1:1 sizing. */
+  manaDigitScale?: number;
   /** Optional drop shadow this field starts with — omit entirely for no
    * shadow (the common case; most rules-text-shaped fields read worse
    * with one), or set at least `color` for fields that benefit from one

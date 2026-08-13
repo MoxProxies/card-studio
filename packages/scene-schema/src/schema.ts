@@ -116,16 +116,19 @@ export const TextLayer = LayerBase.extend({
   color: z.string().default("#000000"),
   align: z.enum(["left", "center", "right"]).default("left"),
   lineHeight: z.number().positive().default(1.2),
-  /** Inline {token} symbols (mana symbols, {T}, the generic-mana-cost
-   * circle, ...) normally render at exactly fontSizePt — this scales
-   * them relative to it (e.g. 1.2 = symbols 20% bigger than the
-   * surrounding glyphs, useful for a mana-cost field where the icons
-   * read better slightly larger than the digits next to them). Both the
-   * word-wrap width calculation and the drawn size use the scaled
-   * value, so layout and rendering never disagree about how wide a
-   * symbol run is. Unset (the common case) behaves exactly as before —
-   * symbols sized 1:1 with the text. */
-  symbolScale: z.number().positive().optional(),
+  /** Scales the digit/letter drawn inside a generic-mana-cost circle
+   * (the "2" in {2}, or the "X" in {X}) relative to the circle's own
+   * fixed size — e.g. 1.2 = 20% bigger digit, less visible padding
+   * inside the same bubble. The circle itself, and every real
+   * symbol-library icon (colored mana, {T}, hybrids, ...), never
+   * changes size: those are flat pre-rendered artwork with the letter
+   * baked directly into the image (see symbol-library/*.svg — the
+   * circle already fills ~94% of its own canvas, so "zooming in" on
+   * the whole image would just grow the visible bubble, not reveal
+   * more of a padded-out glyph), so there's nothing this field can
+   * meaningfully scale for them. Unset (the common case) behaves
+   * exactly as before this field existed. */
+  manaDigitScale: z.number().positive().optional(),
   /** 'shrink' auto-fits fontSizePt (or the minFontSizePt..maxFontSizePt
    * range, if set) to the box; 'clip' truncates overflow. */
   overflow: z.enum(["shrink", "clip", "visible"]).default("shrink"),

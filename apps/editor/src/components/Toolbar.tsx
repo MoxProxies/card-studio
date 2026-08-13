@@ -153,7 +153,7 @@ export function Toolbar({
     align: template.align,
     lineHeight: 1.15,
     overflow: "shrink",
-    symbolScale: template.symbolScale,
+    manaDigitScale: template.manaDigitScale,
     // Whether this field has a shadow at all — and, if so, its exact
     // look — is decided by the template, same as its color/font/size: a
     // title over busy full-art might want one, rules text over its own

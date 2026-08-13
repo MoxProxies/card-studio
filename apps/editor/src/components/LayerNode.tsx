@@ -136,12 +136,12 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
       },
       measureWidth: (text) => ctx.measureText(text).width,
       resolveSymbol: (token) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token),
-      // Inline symbols render at fontSizePx by default; layer.symbolScale
-      // (set only via TextFieldTemplate.symbolScale, e.g. for mana cost)
-      // scales them relative to it. layoutText uses this same width for
-      // wrapping, so the drawn size below (which reads each run's own
-      // `width`) never disagrees with where lines actually broke.
-      symbolWidth: (px) => px * (layer.symbolScale ?? 1),
+      // Every inline symbol occupies exactly 1em of layout space, always —
+      // layer.manaDigitScale (see below, generic-mana digit only) never
+      // affects this, so the mana-cost field's own width/word-wrap can't
+      // grow or shift just because a template tuned how full its digits
+      // look inside their circle.
+      symbolWidth: (px) => px,
       // Set only by the rules/flavor coupling (rulesFlavorFit.ts) to cut a
       // notch for power/toughness out of this layer's bottom-right — see
       // TextLayer's avoidFromYMm/avoidWidthMm doc comment. Unset for every
@@ -243,9 +243,11 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
               );
             }
             if (isGenericManaToken(run.text)) {
-              // runWidth already carries symbolScale (see symbolWidth
-              // above) — reused for height too, not fontSizePx, so the
-              // circle stays square instead of stretching when scaled.
+              // The circle is always runWidth (== fontSizePx, see
+              // symbolWidth above) — layer.manaDigitScale only grows/
+              // shrinks the digit *within* that fixed circle, shrinking
+              // or growing its visible padding instead of the bubble.
+              const digitFontSize = Math.round(runWidth * 0.62 * (layer.manaDigitScale ?? 1));
               return (
                 <Group key={key} x={drawX} y={lineY} listening={false}>
                   <Circle radius={runWidth / 2} x={runWidth / 2} y={runWidth / 2} fill="#cccccc" {...textShadowProps} />
@@ -255,7 +257,7 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
                     height={runWidth}
                     align="center"
                     verticalAlign="middle"
-                    fontSize={Math.round(runWidth * 0.62)}
+                    fontSize={digitFontSize}
                     fontStyle="bold"
                     fontFamily={layer.fontFamily}
                     fill="#000000"

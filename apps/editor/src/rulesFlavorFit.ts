@@ -19,10 +19,11 @@ function getMeasureCtx(): CanvasRenderingContext2D {
 }
 
 const resolveSymbol = (token: string) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token);
-// Each field's own symbolScale (set only via TextFieldTemplate.symbolScale
-// — not typically used on rules/flavor, but honored for consistency with
-// every other symbol-drawing call site) — see TextLayer.symbolScale.
-const symbolWidthFor = (layer: TextLayer) => (px: number) => px * (layer.symbolScale ?? 1);
+// Every inline symbol occupies exactly 1em of layout space — manaDigitScale
+// (TextLayer.manaDigitScale) only affects how a generic-mana digit is
+// *drawn* within its circle at render time (LayerNode.tsx/renderDesign.ts),
+// never how much width it claims here during word-wrap.
+const symbolWidth = (px: number) => px;
 
 function fontStyleOf(layer: TextLayer): { style: string; weight: string } {
   return {
@@ -89,7 +90,7 @@ function shrinkSolo(layer: TextLayer, maxWidthPx: number, maxHeightPx: number, a
     },
     measureWidth: (text) => ctx.measureText(text).width,
     resolveSymbol,
-    symbolWidth: symbolWidthFor(layer),
+    symbolWidth,
     avoidBelowYPx: avoid?.belowYPx,
     avoidWidthPx: avoid?.widthPx,
   });
@@ -138,7 +139,7 @@ function shrinkCombined(
       maxWidthPx,
       measureWidth: measurerAt(fontSizePx, rulesStyle.style, rulesStyle.weight, rulesLayer.fontFamily),
       resolveSymbol,
-      symbolWidth: symbolWidthFor(rulesLayer),
+      symbolWidth,
       avoidBelowYPx: avoid?.belowYPx,
       avoidWidthPx: avoid?.widthPx,
       lineHeightPx,
@@ -152,7 +153,7 @@ function shrinkCombined(
       maxWidthPx,
       measureWidth: measurerAt(fontSizePx, flavorStyle.style, flavorStyle.weight, flavorLayer.fontFamily),
       resolveSymbol,
-      symbolWidth: symbolWidthFor(flavorLayer),
+      symbolWidth,
       avoidBelowYPx: flavorAvoidBelowYPx,
       avoidWidthPx: avoid?.widthPx,
       lineHeightPx,
