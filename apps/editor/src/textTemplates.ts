@@ -28,8 +28,19 @@ export interface TextFieldTemplate {
   /** Overrides DEFAULT_FONT_FAMILY (config.ts) for this field specifically
    * when set — e.g. a script face for flavor text. Must name a family
    * that's actually in the font catalog (or a system font), same caveat
-   * as DEFAULT_FONT_FAMILY itself. Omit to just use the default. */
+   * as DEFAULT_FONT_FAMILY itself. Omit to just use the default. Also
+   * governs the digit(s) drawn inside a generic-mana-cost circle (e.g.
+   * the "2" in {2}) — that's real text too, not part of the icon. Actual
+   * mana/tap/etc. symbols are library images, not glyphs, so no font
+   * applies to them at all; see symbolScale below for sizing those. */
   fontFamily?: string;
+  /** Scales inline {token} symbols (mana symbols, {T}, the generic-mana
+   * circle, ...) relative to fontSizePt — e.g. 1.15 renders them 15%
+   * bigger than the surrounding text, useful for a mana-cost field
+   * where the icons often read better a little larger than the digits
+   * next to them. See TextLayer.symbolScale in schema.ts for exactly
+   * how it's applied. Omit for the default 1:1 sizing. */
+  symbolScale?: number;
   /** Optional drop shadow this field starts with — omit entirely for no
    * shadow (the common case; most rules-text-shaped fields read worse
    * with one), or set at least `color` for fields that benefit from one

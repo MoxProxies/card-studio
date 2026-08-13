@@ -116,6 +116,16 @@ export const TextLayer = LayerBase.extend({
   color: z.string().default("#000000"),
   align: z.enum(["left", "center", "right"]).default("left"),
   lineHeight: z.number().positive().default(1.2),
+  /** Inline {token} symbols (mana symbols, {T}, the generic-mana-cost
+   * circle, ...) normally render at exactly fontSizePt — this scales
+   * them relative to it (e.g. 1.2 = symbols 20% bigger than the
+   * surrounding glyphs, useful for a mana-cost field where the icons
+   * read better slightly larger than the digits next to them). Both the
+   * word-wrap width calculation and the drawn size use the scaled
+   * value, so layout and rendering never disagree about how wide a
+   * symbol run is. Unset (the common case) behaves exactly as before —
+   * symbols sized 1:1 with the text. */
+  symbolScale: z.number().positive().optional(),
   /** 'shrink' auto-fits fontSizePt (or the minFontSizePt..maxFontSizePt
    * range, if set) to the box; 'clip' truncates overflow. */
   overflow: z.enum(["shrink", "clip", "visible"]).default("shrink"),

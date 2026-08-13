@@ -187,7 +187,11 @@ async function drawText(
     // fallback) recognizes becomes a fixed-width inline symbol instead of
     // literal braces; see symbol-library/ and "Inline symbols" in the README.
     resolveSymbol: (token) => Boolean(getSymbolAsset(token)) || isGenericManaToken(token),
-    symbolWidth: (px) => px,
+    // Inline symbols render at fontSizePx by default; layer.symbolScale
+    // (set only via TextFieldTemplate.symbolScale, e.g. for mana cost)
+    // scales them relative to it — same factor the editor's LayerNode.tsx
+    // applies, so a design looks identical here as it did on screen.
+    symbolWidth: (px) => px * (layer.symbolScale ?? 1),
     // Set only by the rules/flavor coupling (rulesFlavorFit.ts, editor-side)
     // to cut a notch for power/toughness out of this layer's bottom-right —
     // see TextLayer's avoidFromYMm/avoidWidthMm doc comment. Unset for every
@@ -243,10 +247,13 @@ async function drawText(
       if (run.kind === "text") {
         ctx.fillText(run.text, drawX, lineY);
       } else if (isGenericManaToken(run.text)) {
-        drawGenericManaSymbol(ctx, run.text, drawX, lineY, runWidth, fontSizePx);
+        // runWidth already carries symbolScale (see symbolWidth above) —
+        // reused as the circle's own square size, not fontSizePx, so it
+        // stays round instead of stretching when scaled.
+        drawGenericManaSymbol(ctx, run.text, drawX, lineY, runWidth, layer.fontFamily);
       } else {
         const image = images.get(run.text);
-        if (image) ctx.drawImage(image, drawX, lineY, runWidth, fontSizePx);
+        if (image) ctx.drawImage(image, drawX, lineY, runWidth, runWidth);
       }
     }
   });
@@ -254,11 +261,15 @@ async function drawText(
 
 /** Draws a generic mana cost number ({0}, {1}, {2}, ...) as a light-grey
  * circle with the digits centered on top — one routine covers every
- * possible value instead of needing a symbol-library SVG per number. */
-function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y: number, size: number, lineHeightPx: number) {
+ * possible value instead of needing a symbol-library SVG per number.
+ * `size` is the circle's own square footprint (already includes
+ * symbolScale — see the call site); `fontFamily` is the layer's own, so
+ * the digit — real text, unlike the circle itself — respects the
+ * field's configured font instead of a hardcoded one. */
+function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y: number, size: number, fontFamily: string) {
   ctx.save();
   const cx = x + size / 2;
-  const cy = y + lineHeightPx / 2;
+  const cy = y + size / 2;
   ctx.beginPath();
   ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
   ctx.fillStyle = "#cccccc";
@@ -270,7 +281,7 @@ function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y:
   // inside the circle's own shadow silhouette.
   ctx.shadowColor = "transparent";
   ctx.fillStyle = "#000000";
-  ctx.font = `bold ${Math.round(size * 0.62)}px sans-serif`;
+  ctx.font = `bold ${Math.round(size * 0.62)}px ${fontFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(digits, cx, cy);

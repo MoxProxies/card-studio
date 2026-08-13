@@ -19,7 +19,10 @@ function getMeasureCtx(): CanvasRenderingContext2D {
 }
 
 const resolveSymbol = (token: string) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token);
-const symbolWidth = (px: number) => px;
+// Each field's own symbolScale (set only via TextFieldTemplate.symbolScale
+// — not typically used on rules/flavor, but honored for consistency with
+// every other symbol-drawing call site) — see TextLayer.symbolScale.
+const symbolWidthFor = (layer: TextLayer) => (px: number) => px * (layer.symbolScale ?? 1);
 
 function fontStyleOf(layer: TextLayer): { style: string; weight: string } {
   return {
@@ -86,7 +89,7 @@ function shrinkSolo(layer: TextLayer, maxWidthPx: number, maxHeightPx: number, a
     },
     measureWidth: (text) => ctx.measureText(text).width,
     resolveSymbol,
-    symbolWidth,
+    symbolWidth: symbolWidthFor(layer),
     avoidBelowYPx: avoid?.belowYPx,
     avoidWidthPx: avoid?.widthPx,
   });
@@ -135,7 +138,7 @@ function shrinkCombined(
       maxWidthPx,
       measureWidth: measurerAt(fontSizePx, rulesStyle.style, rulesStyle.weight, rulesLayer.fontFamily),
       resolveSymbol,
-      symbolWidth,
+      symbolWidth: symbolWidthFor(rulesLayer),
       avoidBelowYPx: avoid?.belowYPx,
       avoidWidthPx: avoid?.widthPx,
       lineHeightPx,
@@ -149,7 +152,7 @@ function shrinkCombined(
       maxWidthPx,
       measureWidth: measurerAt(fontSizePx, flavorStyle.style, flavorStyle.weight, flavorLayer.fontFamily),
       resolveSymbol,
-      symbolWidth,
+      symbolWidth: symbolWidthFor(flavorLayer),
       avoidBelowYPx: flavorAvoidBelowYPx,
       avoidWidthPx: avoid?.widthPx,
       lineHeightPx,

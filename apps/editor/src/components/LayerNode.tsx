@@ -136,7 +136,12 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
       },
       measureWidth: (text) => ctx.measureText(text).width,
       resolveSymbol: (token) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token),
-      symbolWidth: (px) => px,
+      // Inline symbols render at fontSizePx by default; layer.symbolScale
+      // (set only via TextFieldTemplate.symbolScale, e.g. for mana cost)
+      // scales them relative to it. layoutText uses this same width for
+      // wrapping, so the drawn size below (which reads each run's own
+      // `width`) never disagrees with where lines actually broke.
+      symbolWidth: (px) => px * (layer.symbolScale ?? 1),
       // Set only by the rules/flavor coupling (rulesFlavorFit.ts) to cut a
       // notch for power/toughness out of this layer's bottom-right — see
       // TextLayer's avoidFromYMm/avoidWidthMm doc comment. Unset for every
@@ -238,17 +243,21 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
               );
             }
             if (isGenericManaToken(run.text)) {
+              // runWidth already carries symbolScale (see symbolWidth
+              // above) — reused for height too, not fontSizePx, so the
+              // circle stays square instead of stretching when scaled.
               return (
                 <Group key={key} x={drawX} y={lineY} listening={false}>
-                  <Circle radius={runWidth / 2} x={runWidth / 2} y={fontSizePx / 2} fill="#cccccc" {...textShadowProps} />
+                  <Circle radius={runWidth / 2} x={runWidth / 2} y={runWidth / 2} fill="#cccccc" {...textShadowProps} />
                   <Text
                     text={run.text}
                     width={runWidth}
-                    height={fontSizePx}
+                    height={runWidth}
                     align="center"
                     verticalAlign="middle"
                     fontSize={Math.round(runWidth * 0.62)}
                     fontStyle="bold"
+                    fontFamily={layer.fontFamily}
                     fill="#000000"
                   />
                 </Group>
@@ -263,7 +272,7 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
                 x={drawX}
                 y={lineY}
                 width={runWidth}
-                height={fontSizePx}
+                height={runWidth}
                 image={img}
                 listening={false}
                 {...textShadowProps}

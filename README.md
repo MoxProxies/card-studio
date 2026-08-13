@@ -362,8 +362,10 @@ called — now tokenizes each space-separated word into a run list (plain
 text and/or symbols) via an injected `resolveSymbol(token) => boolean`
 predicate, so a `{token}` the caller's asset catalog doesn't recognize
 falls back to its literal `"{token}"` text instead of vanishing. A
-symbol run gets a fixed `symbolWidth(fontSizePx)` (currently 1em square)
-for wrapping purposes, so it wraps as an atomic unit — `"{T}:"` (symbol
+symbol run gets a fixed `symbolWidth(fontSizePx)` (1em square by
+default — see "Sizing and fonting symbols" below for how a field can
+scale that) for wrapping purposes, so it wraps as an atomic unit —
+`"{T}:"` (symbol
 directly followed by punctuation, as MTG text commonly writes it) stays
 together on one line as a single "word." The function's return type
 changed from `lines: string[]` to `lines: LineLayout[]` (each line is a
@@ -390,6 +392,38 @@ passing an unbounded `maxWidthPx` into `shrinkTextToFit` — only an
 explicit newline in the content starts a new line. None of the three
 modes actually clips vertically past the box today (that's a separate,
 still-open gap in `"clip"`, unrelated to symbols).
+
+### Sizing and fonting symbols
+
+Two things about how a `{token}` renders are configurable per field, via
+`TextFieldTemplate` (`textTemplates.ts`) same as everything else about a
+field — most relevant for `manaCost`, where the icons often read better
+a little larger than the surrounding digits, but not specific to it:
+
+- **`symbolScale`** (`TextLayer.symbolScale`, `schema.ts`) — scales
+  symbols relative to `fontSizePt` (e.g. `1.15` renders them 15% bigger
+  than the glyphs next to them). Applied inside `symbolWidth`'s px ->
+  scaled-px conversion, so `layoutText`'s word-wrap and both renderers'
+  drawn size always agree on how wide a symbol run is — there's no
+  separate "layout size" vs "draw size" to keep in sync. Both draw call
+  sites size the symbol/generic-mana-circle *square* off that same
+  scaled width for both dimensions (not `fontSizePx` for height, the
+  glyph box height) so an icon actually gets bigger/smaller rather than
+  stretching out of round when scaled.
+- **`fontFamily`** (already existed for the glyphs themselves) now also
+  reaches the digit drawn inside a generic-mana circle (`{0}`, `{1}`,
+  `{2}`, ..., `{X}`/`{Y}`/`{Z}`) — that digit is real text, unlike the
+  circle and every real symbol-library icon (which are images, so no
+  font applies to them at all). Previously hardcoded to `sans-serif`
+  regardless of the field's own configured font; both
+  `drawGenericManaSymbol` (`renderDesign.ts`) and its Konva-node
+  equivalent in `LayerNode.tsx` now take the layer's `fontFamily`
+  instead.
+
+Neither is set on any shipped template today (both default to the
+existing 1:1-with-text, `sans-serif`-digit look) — set them on
+`manaCost`'s entry in `text-template-library/_base.json` (or a specific
+frame category's override) to opt in, then `pnpm sync-text-templates`.
 
 ## MTG text fields
 
