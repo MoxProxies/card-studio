@@ -354,15 +354,17 @@ export function Toolbar({
    * Adds all the text fields (and the card's own art, and its rarity
    * symbol) a Scryfall card has data for, as one undo step. Only fields
    * with an actual value get added — no placeholder text for e.g. a card
-   * with no flavor text.
+   * with no flavor text. Applies the same default groupings as "Add all
+   * fields" (addAllTextFields above) — title+mana cost, typeline+rarity,
+   * rules+flavour — restricted to whichever pairs this card actually had
+   * both members for.
    */
   const importFromScryfall = (card: ScryfallCard) => {
     const fields = primaryCardFields(card);
     const values = scryfallFieldValues(fields);
 
-    const textLayers = textTemplates
-      .filter((template) => values[template.id])
-      .map((template) => ({ ...templateToLayer(template), content: values[template.id]! }));
+    const importedTemplates = textTemplates.filter((template) => values[template.id]);
+    const textLayers = importedTemplates.map((template) => ({ ...templateToLayer(template), content: values[template.id]! }));
 
     // Sized to the frame's actual illustration window, not the full-bleed
     // card — unlike addImage's default (a full pre-made card scan, already
@@ -425,8 +427,28 @@ export function Toolbar({
         })
       : layers;
 
+    // Same default groupings as "Add all fields" (addAllTextFields above),
+    // restricted to whichever fields this particular card actually had
+    // values for — e.g. a card with no flavor text never gets a "Rules and
+    // flavour" group, since there's only one member to put in it.
+    // groupContiguous (designStore.ts) silently skips any def that
+    // resolves to fewer than two real layers, so it's safe to always
+    // include "Typeline and rarity" whenever typeline was imported: it
+    // just no-ops if no rarity layer (pre-existing, updated in place, or
+    // added by this same import above) ends up in finalLayers.
+    const layerIdByFieldId = new Map(importedTemplates.map((t, i) => [t.id, textLayers[i]!.id]));
+    const groupDefs: Array<{ name: string; layerIds: string[] }> = [];
+    const titleId = layerIdByFieldId.get("title");
+    const manaCostId = layerIdByFieldId.get("manaCost");
+    if (titleId && manaCostId) groupDefs.push({ name: "Title and mana cost", layerIds: [titleId, manaCostId] });
+    const typelineId = layerIdByFieldId.get("typeline");
+    if (typelineId) groupDefs.push({ name: "Typeline and rarity", layerIds: [typelineId, RARITY_LAYER_ID] });
+    const rulesId = layerIdByFieldId.get("rules");
+    const flavorId = layerIdByFieldId.get("flavor");
+    if (rulesId && flavorId) groupDefs.push({ name: "Rules and flavour", layerIds: [rulesId, flavorId] });
+
     const selectIds = [...(artLayer ? [artLayer.id] : []), ...textLayers.map((l) => l.id)];
-    replaceLayers(finalLayers, selectIds);
+    replaceLayers(finalLayers, selectIds, groupDefs);
   };
 
   const addShape = () =>

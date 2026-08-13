@@ -774,29 +774,43 @@ enforced structurally. `groupContiguous` (`designStore.ts`) is the one
 place that assigns a groupId, and it always moves the named layers
 next to each other first (near the topmost original member's position,
 not jumping the block to the very front/back of the stack) before
-tagging them — both `groupLayers` (the properties panel's "Group"
-button, for an ad hoc multi-select) and `addLayersWithGroups` ("Add all
-fields"'s default groupings, see below) go through it. A groupId that
-somehow ended up non-contiguous (there's no code path that produces
-this today) would just render as more than one same-named cluster
-instead of corrupting anything.
+tagging them — `groupLayers` (the properties panel's "Group" button,
+for an ad hoc multi-select), `addLayersWithGroups` ("Add all fields"'s
+default groupings, see below), and `replaceLayers`'s optional
+`groupDefs` param (Scryfall import's default groupings — same feature,
+different store action, since import needs `replaceLayers`'s more
+general "commit an arbitrary rebuilt layer array" for other reasons,
+see below) all go through it. A groupId that somehow ended up
+non-contiguous (there's no code path that produces this today) would
+just render as more than one same-named cluster instead of corrupting
+anything.
 
-**"Add all fields" groups three pairs by default**, via
-`addLayersWithGroups`: Title+Mana Cost, Typeline+Rarity, and
-Rules+Flavour. Everything else it adds (Nickname, Power/Toughness,
+**"Add all fields" and Scryfall import both group the same three pairs
+by default**: Title+Mana Cost, Typeline+Rarity, and Rules+Flavour.
+Everything else either one can add (Nickname, Power/Toughness,
 Artist/Credit, Signature) stays ungrouped. The rarity symbol is a
 pre-existing singleton layer (`RARITY_LAYER_ID`, see [Adding/changing
 rarity symbols](#addingchanging-rarity-symbols)), not one of
 `textTemplates`' own fields, so there's nothing to group Typeline
 *with* unless one already exists — "Add all fields" creates a default
-`common`-rarity layer first if the design doesn't have one yet.
-`addLayersWithGroups` handles both cases (a brand new rarity layer
-being added in the same click, or an already-present one from an
-earlier click) identically and atomically: it appends the new field
-layers, then runs `groupContiguous` once per default pairing over the
-*combined* (existing + just-added) layer list, all as a single undo
-step — pressing Ctrl/Cmd+Z once undoes the whole "Add all fields",
-groups included, regardless of which of the two rarity cases applied.
+`common`-rarity layer first if the design doesn't have one yet, and a
+Scryfall card's own rarity becomes that layer if the design doesn't
+have one yet (or updates an existing one in place) as part of the same
+import. Both callers handle "a brand new rarity layer added in this
+same action" and "an already-present one from earlier" identically and
+atomically: build/append the full layer set first, then run
+`groupContiguous` once per default pairing over that combined list, all
+as a single undo step.
+
+Scryfall import's groupings are a strict subset of "Add all fields"'s,
+though: only pairs where *both* members actually got imported — a card
+with no flavor text never gets a "Rules and flavour" group, since
+there'd only be one real member. `groupContiguous` already silently
+skips (no-ops) any def that resolves to fewer than two real layers, so
+`importFromScryfall` (`Toolbar.tsx`) doesn't need to special-case this
+itself — it can always pass "Typeline and rarity", say, whenever
+typeline was imported, and trust the no-op for a card with no
+recognized rarity.
 
 **Drag-and-drop reordering is native HTML5 DnD, not a library** — no new
 dependency, and the interaction is simple enough (reorder a flat list of

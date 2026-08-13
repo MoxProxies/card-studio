@@ -142,8 +142,14 @@ export interface DesignState {
   /** Replaces the whole layer array in one undo step, selecting `selectIds`
    * — for operations needing specific z-order control addLayers's
    * always-append can't give (e.g. Scryfall import slotting art beneath an
-   * existing frame while adding text fields on top, together). */
-  replaceLayers: (layers: Layer[], selectIds: string[]) => void;
+   * existing frame while adding text fields on top, together). Optional
+   * `groupDefs` — same shape/semantics as addLayersWithGroups's (each
+   * resolved via groupContiguous against the *replaced* array, silently
+   * skipped if it resolves to fewer than two real layers) — for callers
+   * that also need default groupings applied as part of that same undo
+   * step, e.g. Scryfall import mirroring "Add all fields"'s groupings but
+   * only for whichever fields the imported card actually had values for. */
+  replaceLayers: (layers: Layer[], selectIds: string[], groupDefs?: Array<{ name: string; layerIds: string[] }>) => void;
   removeLayers: (ids: string[]) => void;
   duplicateLayers: (ids: string[]) => void;
   moveLayer: (id: string, direction: "up" | "down") => void;
@@ -255,13 +261,24 @@ export function createDesignStore(
         selectedLayerIds: layers.map((l) => l.id),
       })),
 
-    replaceLayers: (layers, selectIds) =>
-      set((state) => ({
-        past: [...state.past, state.design].slice(-HISTORY_LIMIT),
-        future: [],
-        design: { ...state.design, layers },
-        selectedLayerIds: selectIds,
-      })),
+    replaceLayers: (layers, selectIds, groupDefs) =>
+      set((state) => {
+        let nextLayers = layers;
+        const groups: LayerGroup[] = [...state.design.groups];
+        for (const def of groupDefs ?? []) {
+          const groupId = crypto.randomUUID();
+          const next = groupContiguous(nextLayers, def.layerIds, groupId);
+          if (next === nextLayers) continue;
+          nextLayers = next;
+          groups.push({ id: groupId, name: def.name });
+        }
+        return {
+          past: [...state.past, state.design].slice(-HISTORY_LIMIT),
+          future: [],
+          design: { ...state.design, layers: nextLayers, groups },
+          selectedLayerIds: selectIds,
+        };
+      }),
 
     removeLayers: (ids) =>
       set((state) => ({
