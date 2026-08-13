@@ -1,0 +1,7 @@
+# Shell scripts must keep LF endings regardless of the checking-out
+# platform's core.autocrlf — a CRLF-corrupted script fails to parse under
+# bash (e.g. "set -euo pipefail\r" -> "invalid option name"). Windows
+# checkouts of this repo are common (card-studio itself is often worked on
+# natively on Windows even though it deploys into a WSL-hosted
+# moxproxies-website) — see scripts/deploy-to-moxproxies.sh.
+*.sh text eol=lf

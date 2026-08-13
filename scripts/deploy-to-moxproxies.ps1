@@ -65,7 +65,15 @@ $deployScriptInWsl = "$cardStudioDirInWsl/scripts/deploy-to-moxproxies.sh"
 $pushArg = if ($Push) { "--push" } else { "" }
 
 Write-Host "==> Deploying card-studio@$shortHash into $WebsiteDir (WSL distro: $WslDistro)" -ForegroundColor Cyan
-wsl -d $WslDistro bash $deployScriptInWsl $embedDirInWsl $WebsiteDir $commitHash $pushArg
+# Windows checkouts of this repo can have deploy-to-moxproxies.sh on disk
+# with CRLF line endings (Git for Windows' common core.autocrlf=true
+# default, if the working tree was cloned/checked out before .gitattributes
+# forced LF for *.sh) — bash then fails parsing e.g. "set -euo pipefail\r"
+# as an invalid -o argument. Strip any \r in place inside WSL first,
+# unconditionally and idempotently (a no-op if the file is already LF),
+# rather than depending on the checkout being correct.
+$bashCmd = "sed -i 's/\r`$//' '$deployScriptInWsl' && bash '$deployScriptInWsl' '$embedDirInWsl' '$WebsiteDir' '$commitHash' '$pushArg'"
+wsl -d $WslDistro bash -c $bashCmd
 if ($LASTEXITCODE -ne 0) { throw "deploy-to-moxproxies.sh failed (exit $LASTEXITCODE)" }
 
 Write-Host "==> Done: card-studio@$shortHash is live in $WebsiteDir/public/vendor/card-studio" -ForegroundColor Green
