@@ -1027,7 +1027,7 @@ canvas's top-left corner. The editor draws that same JSON on a
 screen-resolution Konva canvas (`EDITOR_DPI = 150`, see
 `apps/editor/src/geometry.ts`); the render service draws the *same*
 JSON at print resolution. Nothing is ever rasterized then scaled up —
-that's what keeps the card crisp at 800 DPI (2176×2960px, the
+that's what keeps the card crisp at 800 DPI (2176×2964px, the
 full-bleed size) for actual print fulfillment, which is what this needs
 to feed. See `packages/scene-schema/src/schema.ts` and
 `services/render/src/renderDesign.ts`.
@@ -1035,17 +1035,17 @@ to feed. See `packages/scene-schema/src/schema.ts` and
 **Card size has three nested, centered regions — `CardSize` in
 `packages/scene-schema/src/schema.ts`, standard values in
 `STANDARD_CARD_SIZE_MM` (`units.ts`):**
-- `widthMm`/`heightMm` — the **full-bleed canvas** (69.088×93.98mm).
+- `widthMm`/`heightMm` — the **full-bleed canvas** (69.096×94.096mm).
   This is what `design.size` sizes the Stage/export to; art and frame
   layers should extend all the way to this edge, since a printer trims
   the sheet down from here.
-- `cutWidthMm`/`cutHeightMm` — the **trim/cut size** (62.992×87.884mm),
+- `cutWidthMm`/`cutHeightMm` — the **trim/cut size** (63×88mm exactly),
   centered within the full-bleed canvas. This is the actual finished
   card. Drawn as a red dashed guide whenever the bleed itself is showing
   (see below) — with the bleed hidden, the card's own edge already is
   the cut line, so the guide would just be a redundant straight overlay
   on top of a now-rounded edge.
-- `safeWidthMm`/`safeHeightMm` — the **safe area** (57.912×83.058mm),
+- `safeWidthMm`/`safeHeightMm` — the **safe area** (57.92×83.174mm),
   centered within the cut size. Nothing critical (text, important art)
   should sit outside this, since cutting has some tolerance. Drawn as an
   orange dashed guide, toggle-able via the ruler icon in the toolbar
@@ -1088,13 +1088,16 @@ already-rendered canvas, not a fresh redraw, so a merely-*scheduled*
 `batchDraw()` wouldn't be reflected in time), captures, then restores
 both.
 
-  These numbers come from a real print vendor's 300 DPI spec (bleed
-  816×1110px / cut 744×1038px / safe 684×981px) — the cut and safe
-  margins are each symmetric per axis, but the safe margin differs
-  *between* axes (2.54mm horizontal vs 2.413mm vertical); that's in the
-  source spec, not a bug. Get this wrong and print jobs come back with
-  content cut off or a border of unprinted white — it's worth reading
-  `units.ts`'s comment before changing any of these numbers.
+  The trim size is the plain, exact 63×88mm standard trading-card size;
+  the bleed (3.048mm/side) and safe-area margins (2.54mm horizontal,
+  2.413mm vertical — asymmetric between axes, that's in the source
+  spec, not a bug) come from a real print vendor's spec and are kept as
+  *absolute* margins around that trim size, not a percentage of it —
+  that's how a vendor actually specifies bleed/safety requirements: a
+  fixed physical buffer for cutting tolerance, independent of the
+  card's own trim dimensions. Get this wrong and print jobs come back
+  with content cut off or a border of unprinted white — it's worth
+  reading `units.ts`'s comment before changing any of these numbers.
 
 **Panel content overflowing its own container was a missing `width:
 100%`, not a sizing problem.** The properties panel used to overflow
