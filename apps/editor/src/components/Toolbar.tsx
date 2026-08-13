@@ -2,7 +2,7 @@ import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import type { Layer } from "@card-studio/scene-schema";
-import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Scissors, Save } from "lucide-react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Scissors, Save, Maximize2, Minimize2 } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
@@ -25,7 +25,15 @@ function newId(): string {
 
 const fmt = (mm: number) => Number(mm.toFixed(2)).toString();
 
-export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
+export function Toolbar({
+  stageRef,
+  isFullscreen,
+  onToggleFullscreen,
+}: {
+  stageRef: RefObject<Konva.Stage>;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+}) {
   const design = useDesignStore((s) => s.design);
   const addLayer = useDesignStore((s) => s.addLayer);
   const addLayers = useDesignStore((s) => s.addLayers);
@@ -508,6 +516,13 @@ export function Toolbar({ stageRef }: { stageRef: RefObject<Konva.Stage> }) {
         title={showBleed ? "Preview trimmed card — hides the bleed margin and rounds the corners" : "Show full bleed"}
       >
         <Scissors size={16} />
+      </button>
+      <button
+        className={`cs-icon-btn${isFullscreen ? " cs-active" : ""}`}
+        onClick={onToggleFullscreen}
+        title={isFullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
+      >
+        {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
       </button>
 
       <span

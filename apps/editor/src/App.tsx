@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type Konva from "konva";
 import { CanvasStage } from "./components/CanvasStage";
 import { Toolbar } from "./components/Toolbar";
@@ -6,6 +6,12 @@ import { LayerPanel } from "./components/LayerPanel";
 import { PropertiesPanel } from "./components/PropertiesPanel";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useFullscreenLightbox } from "./hooks/useFullscreenLightbox";
+
+// Above anything a host page could plausibly stack above it — this is a
+// deliberate lightbox, meant to sit on top of the entire page regardless of
+// whatever z-indexes the embedding site's own nav/modals use.
+const FULLSCREEN_Z_INDEX = 2147483647;
 
 const PANEL_MIN_WIDTH = 180;
 const PANEL_MAX_WIDTH = 520;
@@ -27,11 +33,30 @@ export function App() {
   const stageRef = useRef<Konva.Stage>(null);
   const [layerPanelWidth, setLayerPanelWidth] = useState(DEFAULT_LAYER_PANEL_WIDTH);
   const [propertiesPanelWidth, setPropertiesPanelWidth] = useState(DEFAULT_PROPERTIES_PANEL_WIDTH);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   useKeyboardShortcuts();
+  useFullscreenLightbox(
+    isFullscreen,
+    useCallback(() => setIsFullscreen(false), [])
+  );
 
   return (
-    <div className="cs-root" style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "system-ui, sans-serif" }}>
-      <Toolbar stageRef={stageRef} />
+    <div
+      className="cs-root"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        fontFamily: "system-ui, sans-serif",
+        // position:fixed escapes whatever height/width the host page's own
+        // layout constrains the embed to (see embed.ts) — a shadow root
+        // doesn't create a new containing block for fixed positioning, so
+        // this covers the real viewport regardless of how the custom
+        // element itself is sized on the page.
+        ...(isFullscreen ? { position: "fixed" as const, inset: 0, zIndex: FULLSCREEN_Z_INDEX } : {}),
+      }}
+    >
+      <Toolbar stageRef={stageRef} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen((v) => !v)} />
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <CanvasStage stageRef={stageRef} />
