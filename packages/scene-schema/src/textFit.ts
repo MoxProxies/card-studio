@@ -63,13 +63,29 @@ export function layoutText(params: {
   measureWidth: (text: string) => number;
   resolveSymbol?: (token: string) => boolean;
   symbolWidth?: (fontSizePx: number) => number;
+  /** Together with avoidWidthPx and lineHeightPx, cuts a notch out of the
+   * bottom-right of this text block for word-wrap purposes — e.g. rules/
+   * flavor text making room for power/toughness sitting below them (see
+   * TextLayer's avoidFromYMm/avoidWidthMm doc comment in schema.ts, the
+   * only current source of these values, converted to px). A line whose
+   * bottom edge falls at or past avoidBelowYPx wraps to avoidWidthPx
+   * instead of maxWidthPx. All three are optional and only take effect
+   * together — omit for the original plain-rectangle wrap. */
+  avoidBelowYPx?: number;
+  avoidWidthPx?: number;
+  lineHeightPx?: number;
 }): LineLayout[] {
-  const { content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth } = params;
+  const { content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth, avoidBelowYPx, avoidWidthPx, lineHeightPx } = params;
 
   const lines: LineLayout[] = [];
   const spaceWidth = measureWidth(" ");
   const symW = resolveSymbol && symbolWidth ? symbolWidth(fontSizePx) : 0;
   const runWidth = (run: TextRun) => (run.kind === "symbol" ? symW : measureWidth(run.text));
+  const maxWidthForLine = (lineIndex: number): number => {
+    if (avoidBelowYPx === undefined || avoidWidthPx === undefined || lineHeightPx === undefined) return maxWidthPx;
+    const lineBottomPx = (lineIndex + 1) * lineHeightPx;
+    return lineBottomPx > avoidBelowYPx ? avoidWidthPx : maxWidthPx;
+  };
 
   for (const paragraph of content.split("\n")) {
     const words = paragraph.split(" ").map((word) => tokenizeWord(word, resolveSymbol));
@@ -95,7 +111,7 @@ export function layoutText(params: {
     for (const wordRuns of words) {
       const wordWidth = wordRuns.reduce((sum, run) => sum + runWidth(run), 0);
       const additional = (currentWords.length > 0 ? spaceWidth : 0) + wordWidth;
-      if (currentWidth + additional > maxWidthPx && currentWords.length > 0) {
+      if (currentWidth + additional > maxWidthForLine(lines.length) && currentWords.length > 0) {
         flush();
         currentWords = [wordRuns];
         currentWidth = wordWidth;
@@ -134,6 +150,12 @@ export function layoutText(params: {
  * it's given, so "shrink from a big starting point" and "fit within a
  * range" are the same algorithm. `minFontSizePx` is that search's floor
  * (default 4, matching the original hardcoded value).
+ *
+ * `avoidBelowYPx`/`avoidWidthPx` pass straight through to `layoutText` at
+ * every candidate size (see its doc comment) — the notch is defined in
+ * absolute px from this box's own top, so it stays put across the shrink
+ * search even as `lineHeightPx` (fontSizePx * lineHeightRatio) changes
+ * each iteration.
  */
 export function shrinkTextToFit(params: {
   content: string;
@@ -147,6 +169,8 @@ export function shrinkTextToFit(params: {
   measureWidth: (text: string) => number;
   resolveSymbol?: (token: string) => boolean;
   symbolWidth?: (fontSizePx: number) => number;
+  avoidBelowYPx?: number;
+  avoidWidthPx?: number;
 }): TextFitResult {
   const {
     content,
@@ -160,17 +184,39 @@ export function shrinkTextToFit(params: {
     measureWidth,
     resolveSymbol,
     symbolWidth,
+    avoidBelowYPx,
+    avoidWidthPx,
   } = params;
 
   let fontSizePx = startFontSizePx;
   setFontSizePx(fontSizePx);
-  let lines = layoutText({ content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth });
+  let lines = layoutText({
+    content,
+    fontSizePx,
+    maxWidthPx,
+    measureWidth,
+    resolveSymbol,
+    symbolWidth,
+    avoidBelowYPx,
+    avoidWidthPx,
+    lineHeightPx: fontSizePx * lineHeightRatio,
+  });
 
   if (shrink) {
     while (lines.length * (fontSizePx * lineHeightRatio) > maxHeightPx && fontSizePx > minFontSizePx) {
       fontSizePx -= 1;
       setFontSizePx(fontSizePx);
-      lines = layoutText({ content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth });
+      lines = layoutText({
+        content,
+        fontSizePx,
+        maxWidthPx,
+        measureWidth,
+        resolveSymbol,
+        symbolWidth,
+        avoidBelowYPx,
+        avoidWidthPx,
+        lineHeightPx: fontSizePx * lineHeightRatio,
+      });
     }
   }
 

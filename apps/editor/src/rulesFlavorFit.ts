@@ -32,11 +32,43 @@ function findByFieldId(design: Design, fieldId: string): TextLayer | undefined {
   return design.layers.find((l): l is TextLayer => l.type === "text" && l.fieldId === fieldId);
 }
 
+/** Where (if at all) power/toughness cuts into the rules/flavor box, in px
+ * relative to the box's own top — null when there's no P/T layer, or it
+ * doesn't reach into the box at all (elsewhere on the card, or entirely
+ * above/left of it). `belowYPx` is where the notch starts (lines whose
+ * bottom edge falls at or past it must avoid `widthPx` instead of the
+ * box's full width) — see layoutText's avoidBelowYPx/avoidWidthPx doc
+ * comment for how it's used. */
+interface AvoidRect {
+  belowYPx: number;
+  widthPx: number;
+}
+
+function computeAvoidRect(
+  design: Design,
+  boxXMm: number,
+  boxWidthMm: number,
+  boxTopMm: number,
+  boxBottomMm: number,
+  gapMm: number
+): AvoidRect | null {
+  const ptLayer = findByFieldId(design, "powerToughness");
+  if (!ptLayer || ptLayer.x >= boxXMm + boxWidthMm) return null;
+  const ptTopMm = ptLayer.y - gapMm;
+  if (ptTopMm >= boxBottomMm) return null;
+  return {
+    belowYPx: mmToStagePx(Math.max(0, ptTopMm - boxTopMm)),
+    widthPx: mmToStagePx(Math.max(0, ptLayer.x - gapMm - boxXMm)),
+  };
+}
+
 /** A single text field alone in the boundary box — just the ordinary
  * single-box shrink-to-fit, same algorithm LayerNode.tsx's live canvas
  * uses, run here ahead of time so the *stored* height/fontSizePt already
- * reflect the fit instead of leaving it to each render. */
-function shrinkSolo(layer: TextLayer, maxWidthPx: number, maxHeightPx: number) {
+ * reflect the fit instead of leaving it to each render. `avoid` (when
+ * given) narrows lines that reach into the power/toughness notch — see
+ * AvoidRect. */
+function shrinkSolo(layer: TextLayer, maxWidthPx: number, maxHeightPx: number, avoid: AvoidRect | null) {
   const ctx = getMeasureCtx();
   const { style, weight } = fontStyleOf(layer);
   const startFontSizePx = ptToPx(layer.maxFontSizePt ?? layer.fontSizePt);
@@ -55,6 +87,8 @@ function shrinkSolo(layer: TextLayer, maxWidthPx: number, maxHeightPx: number) {
     measureWidth: (text) => ctx.measureText(text).width,
     resolveSymbol,
     symbolWidth,
+    avoidBelowYPx: avoid?.belowYPx,
+    avoidWidthPx: avoid?.widthPx,
   });
 }
 
@@ -64,8 +98,22 @@ function shrinkSolo(layer: TextLayer, maxWidthPx: number, maxHeightPx: number) {
  * the whole pair shrinking together until rules-height + gap + flavor-
  * height fits maxHeightPx. `layoutText` (textFit.ts) is measure-only at a
  * fixed size — the shrink search loop here plays the role
- * shrinkTextToFit's own internal loop does for a single field. */
-function shrinkCombined(rulesLayer: TextLayer, flavorLayer: TextLayer, maxWidthPx: number, maxHeightPx: number, gapLines: number) {
+ * shrinkTextToFit's own internal loop does for a single field.
+ *
+ * `avoid` (when given) is in px relative to the *box's* own top — rules
+ * starts right at the box top, so it's used as-is for rules' own layout;
+ * flavor starts further down (after rules' lines and the gap between
+ * them), so its own avoid threshold is re-based to flavor-local
+ * coordinates each candidate size, since rules' own line count (and so
+ * flavor's start offset) changes as the search shrinks. */
+function shrinkCombined(
+  rulesLayer: TextLayer,
+  flavorLayer: TextLayer,
+  maxWidthPx: number,
+  maxHeightPx: number,
+  gapLines: number,
+  avoid: AvoidRect | null
+) {
   const ctx = getMeasureCtx();
   const rulesStyle = fontStyleOf(rulesLayer);
   const flavorStyle = fontStyleOf(flavorLayer);
@@ -80,6 +128,7 @@ function shrinkCombined(rulesLayer: TextLayer, flavorLayer: TextLayer, maxWidthP
   };
 
   const layoutAt = (fontSizePx: number) => {
+    const lineHeightPx = fontSizePx * lineHeightRatio;
     const rulesLines = layoutText({
       content: rulesLayer.content,
       fontSizePx,
@@ -87,7 +136,13 @@ function shrinkCombined(rulesLayer: TextLayer, flavorLayer: TextLayer, maxWidthP
       measureWidth: measurerAt(fontSizePx, rulesStyle.style, rulesStyle.weight, rulesLayer.fontFamily),
       resolveSymbol,
       symbolWidth,
+      avoidBelowYPx: avoid?.belowYPx,
+      avoidWidthPx: avoid?.widthPx,
+      lineHeightPx,
     });
+    const rulesHeightPx = rulesLines.length * lineHeightPx;
+    const gapPx = gapLines * lineHeightPx;
+    const flavorAvoidBelowYPx = avoid !== null ? Math.max(0, avoid.belowYPx - (rulesHeightPx + gapPx)) : undefined;
     const flavorLines = layoutText({
       content: flavorLayer.content,
       fontSizePx,
@@ -95,15 +150,21 @@ function shrinkCombined(rulesLayer: TextLayer, flavorLayer: TextLayer, maxWidthP
       measureWidth: measurerAt(fontSizePx, flavorStyle.style, flavorStyle.weight, flavorLayer.fontFamily),
       resolveSymbol,
       symbolWidth,
+      avoidBelowYPx: flavorAvoidBelowYPx,
+      avoidWidthPx: avoid?.widthPx,
+      lineHeightPx,
     });
-    const lineHeightPx = fontSizePx * lineHeightRatio;
-    const gapPx = gapLines * lineHeightPx;
-    const rulesHeightPx = rulesLines.length * lineHeightPx;
     const flavorHeightPx = flavorLines.length * lineHeightPx;
     return { rulesHeightPx, flavorHeightPx, gapPx, totalHeightPx: rulesHeightPx + gapPx + flavorHeightPx };
   };
 
-  const startFontSizePx = ptToPx(Math.max(rulesLayer.maxFontSizePt ?? rulesLayer.fontSizePt, flavorLayer.maxFontSizePt ?? flavorLayer.fontSizePt));
+  // The ceiling both fields share is the *more restrictive* of their two
+  // configured maximums, not the more permissive — rules and flavor
+  // usually declare different maxFontSizePt (rules text tends to allow a
+  // slightly larger cap than flavor), and since they're now forced to one
+  // shared size, that size can never legally exceed either field's own
+  // limit.
+  const startFontSizePx = ptToPx(Math.min(rulesLayer.maxFontSizePt ?? rulesLayer.fontSizePt, flavorLayer.maxFontSizePt ?? flavorLayer.fontSizePt));
   const minFontSizePx = ptToPx(Math.min(rulesLayer.minFontSizePt ?? 5, flavorLayer.minFontSizePt ?? 5));
 
   let fontSizePx = startFontSizePx;
@@ -119,13 +180,17 @@ function shrinkCombined(rulesLayer: TextLayer, flavorLayer: TextLayer, maxWidthP
 /**
  * Computes the rules/flavor boundary box — from the typeline field's
  * bottom edge to whichever of edition/artist/signature sits topmost
- * (raised further if needed to clear the power/toughness field entirely,
- * rather than wrapping text around it) — and, within it, the shared font
+ * (both gaps per-template-configurable) — and, within it, the shared font
  * size and positions that make rules and flavor (whichever are present)
- * fit as one unit. Returns patches ready for commitLayerChanges/
- * updateLayerLive, or null when there's nothing to do: neither field
- * present, or not enough of the surrounding layout (typeline, a legal-row
- * field) exists yet to define a box against.
+ * fit as one unit. When power/toughness is present and horizontally
+ * overlaps the box, lines that would otherwise run into it are narrowed
+ * to wrap around its left edge instead — a true per-line notch cut out of
+ * the box's bottom-right corner, not a shortened box (see AvoidRect /
+ * computeAvoidRect, and layoutText's avoidBelowYPx/avoidWidthPx). Returns
+ * patches ready for commitLayerChanges/updateLayerLive, or null when
+ * there's nothing to do: neither field present, or not enough of the
+ * surrounding layout (typeline, a legal-row field) exists yet to define a
+ * box against.
  *
  * Read-only — never mutates `design`. Callers are expected to fold the
  * result into whatever they're about to commit (see Toolbar.tsx's
@@ -158,40 +223,60 @@ export function computeRulesFlavorPatch(
   const boxXMm = anchor.x;
   const boxWidthMm = anchor.width;
   const boxTopMm = typelineLayer.y + typelineLayer.height + gapAboveTypelineMm;
-
-  // Rather than reflowing text around power/toughness (an L-shaped
-  // exclusion, needing per-line width variation), the box's bottom edge
-  // is simply raised to sit entirely above it when it's present and
-  // horizontally overlaps the box — guarantees no overlap with a lot
-  // less complexity, at the cost of a little potential height in the
-  // rare case content is long enough to want it.
-  const powerToughnessLayer = findByFieldId(design, "powerToughness");
-  const ptClampMm =
-    powerToughnessLayer && powerToughnessLayer.x < boxXMm + boxWidthMm
-      ? powerToughnessLayer.y - gapAboveLegalMm
-      : Number.POSITIVE_INFINITY;
-  const boxBottomMm = Math.min(legalLayer.y - gapAboveLegalMm, ptClampMm);
+  const boxBottomMm = legalLayer.y - gapAboveLegalMm;
   const boxHeightMm = boxBottomMm - boxTopMm;
   if (boxHeightMm <= 0) return null;
 
   const boxWidthPx = mmToStagePx(boxWidthMm);
   const boxHeightPx = mmToStagePx(boxHeightMm);
+  // gapAboveLegalMm doubles as the P/T clearance gap — both express the
+  // same "small margin around the next thing over" idea, so reusing it
+  // avoids a third per-template number for what's already a rare, subtle
+  // knob.
+  const avoid = computeAvoidRect(design, boxXMm, boxWidthMm, boxTopMm, boxBottomMm, gapAboveLegalMm);
+
+  // avoidFromYMm/avoidWidthMm on TextLayer are relative to *that layer's
+  // own* y — re-bases the box-relative notch onto a layer that starts at
+  // `layerTopMm` within the box. Undefined values are set explicitly (not
+  // omitted) so a stale notch from a since-removed or since-moved power/
+  // toughness field is properly cleared rather than left stuck on the
+  // layer.
+  const avoidPatchFor = (layerTopMm: number): { avoidFromYMm?: number; avoidWidthMm?: number } => {
+    if (!avoid) return { avoidFromYMm: undefined, avoidWidthMm: undefined };
+    return {
+      avoidFromYMm: stagePxToMm(avoid.belowYPx) - (layerTopMm - boxTopMm),
+      avoidWidthMm: stagePxToMm(avoid.widthPx),
+    };
+  };
 
   if (rulesLayer && flavorLayer) {
-    const { fontSizePx, rulesHeightPx, flavorHeightPx, gapPx } = shrinkCombined(rulesLayer, flavorLayer, boxWidthPx, boxHeightPx, flavorGapLines);
+    const { fontSizePx, rulesHeightPx, flavorHeightPx, gapPx } = shrinkCombined(
+      rulesLayer,
+      flavorLayer,
+      boxWidthPx,
+      boxHeightPx,
+      flavorGapLines,
+      avoid
+    );
     const fontSizePt = pxToPt(fontSizePx);
     const rulesHeightMm = Math.max(0.1, stagePxToMm(rulesHeightPx));
     const flavorYMm = boxTopMm + stagePxToMm(rulesHeightPx + gapPx);
     const flavorHeightMm = Math.max(0.1, stagePxToMm(flavorHeightPx));
     return [
-      { id: rulesLayer.id, patch: { x: boxXMm, y: boxTopMm, width: boxWidthMm, height: rulesHeightMm, fontSizePt } },
-      { id: flavorLayer.id, patch: { x: boxXMm, y: flavorYMm, width: boxWidthMm, height: flavorHeightMm, fontSizePt } },
+      {
+        id: rulesLayer.id,
+        patch: { x: boxXMm, y: boxTopMm, width: boxWidthMm, height: rulesHeightMm, fontSizePt, ...avoidPatchFor(boxTopMm) },
+      },
+      {
+        id: flavorLayer.id,
+        patch: { x: boxXMm, y: flavorYMm, width: boxWidthMm, height: flavorHeightMm, fontSizePt, ...avoidPatchFor(flavorYMm) },
+      },
     ];
   }
 
   const solo = rulesLayer ?? flavorLayer!;
-  const { fontSizePx, lines } = shrinkSolo(solo, boxWidthPx, boxHeightPx);
+  const { fontSizePx, lines } = shrinkSolo(solo, boxWidthPx, boxHeightPx, avoid);
   const fontSizePt = pxToPt(fontSizePx);
   const heightMm = Math.max(0.1, stagePxToMm(lines.length * fontSizePx * solo.lineHeight));
-  return [{ id: solo.id, patch: { x: boxXMm, y: boxTopMm, width: boxWidthMm, height: heightMm, fontSizePt } }];
+  return [{ id: solo.id, patch: { x: boxXMm, y: boxTopMm, width: boxWidthMm, height: heightMm, fontSizePt, ...avoidPatchFor(boxTopMm) } }];
 }

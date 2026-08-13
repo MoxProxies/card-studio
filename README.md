@@ -553,19 +553,18 @@ real MTG text box reads.
 The box's bounds are computed, not configured directly: top is the
 `typeline` layer's own bottom edge plus `gapAboveTypelineMm`; bottom is
 whichever of `edition`/`artist`/`signature` sits topmost, minus
-`gapAboveLegalMm` — further raised to clear `powerToughness` entirely
-when it's present and horizontally overlaps the box (see below). `x`/
-`width` come from whichever of the two layers already exists (rules,
-if both are being added together). All three gap values are read only
-off the **`rules`** field's own template entry (`gapAboveTypelineMm`,
-`gapAboveLegalMm`, `flavorGapLines` — see `TextFieldTemplate` in
-`textTemplates.ts`), since the pair occupies one shared region rather
-than each having its own; a template with no `rules` entry, or missing
-either `typeline` or a legal-row field in the current design, just never
-activates the coupling — rules/flavor (if present independently) behave
-like any other field. `flavorGapLines` is a multiple of the shared line
-height (default 2), not a fixed mm value, so the gap between the two
-blocks scales with whatever size they end up shrinking to.
+`gapAboveLegalMm`. `x`/`width` come from whichever of the two layers
+already exists (rules, if both are being added together). All three gap
+values are read only off the **`rules`** field's own template entry
+(`gapAboveTypelineMm`, `gapAboveLegalMm`, `flavorGapLines` — see
+`TextFieldTemplate` in `textTemplates.ts`), since the pair occupies one
+shared region rather than each having its own; a template with no
+`rules` entry, or missing either `typeline` or a legal-row field in the
+current design, just never activates the coupling — rules/flavor (if
+present independently) behave like any other field. `flavorGapLines` is
+a multiple of the shared line height (default 2), not a fixed mm value,
+so the gap between the two blocks scales with whatever size they end up
+shrinking to.
 
 Both fields, whichever are present, are laid out together and shrink as
 one unit: `shrinkCombined` (`rulesFlavorFit.ts`) word-wraps rules and
@@ -576,26 +575,50 @@ extracted so this could reuse it instead of re-implementing word-wrap)
 and shrinks that shared size until rules-height + gap + flavor-height
 fits the box. Only one of the two present (added independently, one at a
 time) falls back to the ordinary single-box `shrinkTextToFit` against
-the same computed box — no new algorithm needed for that case.
+the same computed box — no new algorithm needed for that case. The
+shared ceiling both fields search down from is the *more restrictive* of
+their two individually-configured `maxFontSizePt`s, not the more
+permissive — since they're forced to one shared size, that size can
+never legally exceed either field's own limit.
 
-**Power/toughness avoidance is a raised bottom bound, not per-line text
-wrapping around it.** True L-shaped wrapping (the box narrowing only for
-the lines that vertically overlap `powerToughness`) would need a custom
-per-line max-width, on top of a per-size word-wrap that already has to
-run twice (rules and flavor independently) inside the shrink search —
-more moving parts, more edge cases (a single long word that doesn't fit
-even the narrowed width at the font floor), for a benefit that only ever
-matters for the box's last line or two. Simply excluding
-`powerToughness`'s whole row from the box's height budget gets the same
-practical guarantee — text never overlaps it — for a small, rare cost in
-available height instead.
+**Power/toughness avoidance is a true per-line notch, not a shortened
+box.** When `powerToughness` is present and horizontally overlaps the
+rules/flavor box, only the lines that actually reach down into its row
+are narrowed to wrap around its left edge (plus `gapAboveLegalMm`'s
+clearance, reused here as the P/T margin too) — everything above that
+row still uses the box's full width, unlike an earlier version of this
+feature that simply raised the whole box's bottom bound to clear P/T's
+row entirely. `layoutText` (`textFit.ts`) takes this as
+`avoidBelowYPx`/`avoidWidthPx`/`lineHeightPx`: a line whose bottom edge
+falls at or past `avoidBelowYPx` wraps to `avoidWidthPx` instead of the
+box's full width. `shrinkCombined` computes rules' own line count/height
+first (needed to know where flavor starts), then re-bases the same
+box-relative notch into flavor-local coordinates before laying flavor
+out — both at every candidate font size in the shrink search, since the
+notch's *position relative to whichever block it falls in* shifts as
+rules' line count changes with size.
+
+The notch itself is **stored on the layers, not recomputed at draw
+time**: `avoidFromYMm`/`avoidWidthMm` (`TextLayer`, `schema.ts`) hold it
+in each layer's own local coordinates (mm, relative to that layer's own
+`y`), written by `computeRulesFlavorPatch` alongside the usual `x`/`y`/
+`width`/`height`/`fontSizePt`. Both renderers (`LayerNode.tsx`,
+`services/render`'s `drawText`) convert these two fields to px and pass
+them straight into `shrinkTextToFit` whenever they're set — plain
+rectangle wrapping otherwise — so neither renderer needs to know
+`powerToughness` exists, look up sibling layers, or read template data;
+they stay exactly as "dumb" as every other field, just with two more
+optional numbers to forward. A patch that no longer needs the notch (P/T
+moved away or was removed) sets both fields to `undefined` explicitly
+rather than omitting them, clearing any stale notch from a prior fit.
 
 The result is written directly onto the `rules`/`flavor` `TextLayer`s'
-own `x`/`y`/`width`/`height`/`fontSizePt` — same fields every other
-layer uses, computed once instead of live — so `LayerNode.tsx` and
-`services/render` need no special-case rendering for this pair at all;
-they just draw whatever's stored, like any other text field. Runs
-whenever there's something to (re-)fit: `Toolbar.tsx`'s
+own `x`/`y`/`width`/`height`/`fontSizePt`/`avoidFromYMm`/`avoidWidthMm`
+— computed once instead of live — so `LayerNode.tsx` and
+`services/render` need no *rules/flavor-specific* rendering logic at
+all; they just draw whatever's stored, like any other text field, using
+the same generic notch support any text layer could use. Runs whenever
+there's something to (re-)fit: `Toolbar.tsx`'s
 `addAllTextFields`/`addTextField`/`importFromScryfall` fold the patch
 into the very layers they're about to commit rather than a separate
 follow-up commit (so e.g. "Add all fields" stays one undo step), and

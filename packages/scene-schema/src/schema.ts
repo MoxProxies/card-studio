@@ -132,6 +132,20 @@ export const TextLayer = LayerBase.extend({
   shadowOffsetYPt: z.number().default(0),
   shadowBlurPt: z.number().min(0).default(1),
   shadowOpacity: z.number().min(0).max(1).default(0.75),
+  /** Optional bottom-right notch cut out of this layer's own box for word
+   * wrap purposes — e.g. rules/flavor text making room for power/
+   * toughness sitting in the corner below them (see rulesFlavorFit.ts,
+   * the only current writer of these two fields). Both mm, relative to
+   * this layer's own y/x: lines whose vertical span falls at or below
+   * avoidFromYMm are wrapped to avoidWidthMm instead of the layer's full
+   * `width`; lines entirely above it use the full width as normal.
+   * Renderers (LayerNode.tsx, the print render service's drawText) apply
+   * this generically off these two fields alone — no lookup of sibling
+   * layers, fieldId, or template data needed at draw time. Unset (the
+   * common case, every field other than rules/flavor) draws the box as a
+   * plain rectangle exactly as before. */
+  avoidFromYMm: z.number().optional(),
+  avoidWidthMm: z.number().nonnegative().optional(),
 });
 
 export const ShapeLayer = LayerBase.extend({

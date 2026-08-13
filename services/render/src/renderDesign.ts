@@ -188,6 +188,12 @@ async function drawText(
     // literal braces; see symbol-library/ and "Inline symbols" in the README.
     resolveSymbol: (token) => Boolean(getSymbolAsset(token)) || isGenericManaToken(token),
     symbolWidth: (px) => px,
+    // Set only by the rules/flavor coupling (rulesFlavorFit.ts, editor-side)
+    // to cut a notch for power/toughness out of this layer's bottom-right —
+    // see TextLayer's avoidFromYMm/avoidWidthMm doc comment. Unset for every
+    // other field, same plain-rectangle wrap as before.
+    avoidBelowYPx: layer.avoidFromYMm !== undefined ? mmToPx(layer.avoidFromYMm, dpi) : undefined,
+    avoidWidthPx: layer.avoidWidthMm !== undefined ? mmToPx(layer.avoidWidthMm, dpi) : undefined,
   });
 
   // Preload every distinct real (non-generic-number) symbol image the final

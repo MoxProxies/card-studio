@@ -137,6 +137,12 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
       measureWidth: (text) => ctx.measureText(text).width,
       resolveSymbol: (token) => Boolean(getSymbolAssetUrl(token)) || isGenericManaToken(token),
       symbolWidth: (px) => px,
+      // Set only by the rules/flavor coupling (rulesFlavorFit.ts) to cut a
+      // notch for power/toughness out of this layer's bottom-right — see
+      // TextLayer's avoidFromYMm/avoidWidthMm doc comment. Unset for every
+      // other field, same plain-rectangle wrap as before.
+      avoidBelowYPx: layer.avoidFromYMm !== undefined ? mmToStagePx(layer.avoidFromYMm) : undefined,
+      avoidWidthPx: layer.avoidWidthMm !== undefined ? mmToStagePx(layer.avoidWidthMm) : undefined,
     });
     if (layer.shadowColor) {
       const ptToPxEditor = (pt: number) => (pt / 72) * EDITOR_DPI;
