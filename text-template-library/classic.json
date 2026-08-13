@@ -77,7 +77,10 @@
     "color": "#111111",
     "isItalic": false,
     "minFontSizePt": 5,
-    "maxFontSizePt": 10
+    "maxFontSizePt": 10,
+    "gapAboveTypelineMm": 1.5,
+    "gapAboveLegalMm": 1.5,
+    "flavorGapLines": 2
   },
   {
     "id": "flavor",

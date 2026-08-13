@@ -25,6 +25,9 @@ import { useDesignStore } from "../store/DesignProvider";
 import { getFrameAsset, getFrameAssetUrl } from "../frameAssets";
 import { EMBEDDED_FONT_FAMILIES, SYSTEM_FONT_FALLBACKS } from "../fontAssets";
 import { FrameLibraryModal } from "./FrameLibraryModal";
+import { useActiveFrameCategory } from "../hooks/useActiveFrameCategory";
+import { getTextTemplates } from "../textTemplates";
+import { computeRulesFlavorPatch } from "../rulesFlavorFit";
 
 const getPanelStyle = (width: number): CSSProperties => ({
   width,
@@ -54,8 +57,22 @@ export function PropertiesPanel({ width }: { width: number }) {
   const groupLayers = useDesignStore((s) => s.groupLayers);
   const entitlements = useDesignStore((s) => s.entitlements);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
+  const textTemplates = getTextTemplates(useActiveFrameCategory());
 
   const selectedLayers = design.layers.filter((l) => selectedLayerIds.includes(l.id));
+
+  // Typing into rules or flavor's own content re-fits the pair (see
+  // rulesFlavorFit.ts) against the design's current typeline/legal-row/
+  // power-toughness layout, live — same beginLiveEdit/updateLayerLive/
+  // commitLiveEdit session as the content edit itself, so it's still just
+  // one undo step once the field loses focus.
+  const updateTextContentLive = (layer: Extract<Layer, { type: "text" }>, content: string) => {
+    updateLayerLive(layer.id, { content });
+    if (layer.fieldId !== "rules" && layer.fieldId !== "flavor") return;
+    const preview = { ...design, layers: design.layers.map((l) => (l.id === layer.id ? { ...l, content } : l)) };
+    const patches = computeRulesFlavorPatch(preview, textTemplates);
+    patches?.forEach((p) => updateLayerLive(p.id, p.patch));
+  };
 
   const alignTo = (axis: "x" | "y", mode: "start" | "center" | "end") => {
     const entries = selectedLayers.map((l) => {
@@ -291,7 +308,7 @@ export function PropertiesPanel({ width }: { width: number }) {
                   : undefined
               }
               onFocus={beginLiveEdit}
-              onChange={(e) => updateLayerLive(layer.id, { content: e.target.value })}
+              onChange={(e) => updateTextContentLive(layer, e.target.value)}
               onBlur={commitLiveEdit}
             />
           </div>

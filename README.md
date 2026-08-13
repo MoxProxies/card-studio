@@ -408,10 +408,13 @@ signature) — each
 field's `x`/`y`/`width`/`height` (mm, relative to the *cut* corner, not
 the full-bleed canvas), `fontSizePt`/`fontWeight`/`isItalic`, `align`,
 and `color` are independent values, not derived from a shared grid
-formula. That's deliberate: if one field looks slightly off against a
-particular frame, open that frame's category file and adjust just that
-field's numbers — nothing else depends on them or needs to change in
-step. `flavor` starts `isItalic: true` in both `_base.json` and
+formula — **except `rules`/`flavor`'s box, which is computed from the
+surrounding fields rather than configured directly (see "Rules/flavor
+text share one boundary box" below)**. That's deliberate: if one field
+looks slightly off against a particular frame, open that frame's
+category file and adjust just that field's numbers — nothing else
+depends on them or needs to change in step. `flavor` starts
+`isItalic: true` in both `_base.json` and
 `classic.json` (conventional for MTG flavor text); every other field
 defaults to `false`. `edition` sits directly above `artist`, and
 `signature` sits inline with `artist` (same `y`) but right-aligned at
@@ -534,6 +537,72 @@ each scaling from a different physical reference, so text rendered about
 export — meaning a shrink threshold computed from these numbers would've
 tripped at the wrong point. Fixed by deriving font size from
 `EDITOR_DPI` too, the same as everything else on the canvas.
+
+### Rules/flavor text share one boundary box
+
+Unlike every other field, `rules` and `flavor` don't each get their own
+fixed box — they share one automatically-computed boundary box and one
+shared font size, laid out and re-fit by `rulesFlavorFit.ts`
+(`computeRulesFlavorPatch`) rather than each independently shrinking
+within whatever `x`/`y`/`width`/`height` the template gave it. That's
+deliberate: two independently-shrinking boxes with independent font
+ranges (the old behavior) meant rules and flavor routinely ended up at
+visibly different sizes with an arbitrary gap between them — not how a
+real MTG text box reads.
+
+The box's bounds are computed, not configured directly: top is the
+`typeline` layer's own bottom edge plus `gapAboveTypelineMm`; bottom is
+whichever of `edition`/`artist`/`signature` sits topmost, minus
+`gapAboveLegalMm` — further raised to clear `powerToughness` entirely
+when it's present and horizontally overlaps the box (see below). `x`/
+`width` come from whichever of the two layers already exists (rules,
+if both are being added together). All three gap values are read only
+off the **`rules`** field's own template entry (`gapAboveTypelineMm`,
+`gapAboveLegalMm`, `flavorGapLines` — see `TextFieldTemplate` in
+`textTemplates.ts`), since the pair occupies one shared region rather
+than each having its own; a template with no `rules` entry, or missing
+either `typeline` or a legal-row field in the current design, just never
+activates the coupling — rules/flavor (if present independently) behave
+like any other field. `flavorGapLines` is a multiple of the shared line
+height (default 2), not a fixed mm value, so the gap between the two
+blocks scales with whatever size they end up shrinking to.
+
+Both fields, whichever are present, are laid out together and shrink as
+one unit: `shrinkCombined` (`rulesFlavorFit.ts`) word-wraps rules and
+flavor independently at the same candidate font size (each keeping its
+own style — flavor is normally italic, rules normally isn't — via
+`layoutText`, the per-size-only half of `textFit.ts`'s `shrinkTextToFit`
+extracted so this could reuse it instead of re-implementing word-wrap)
+and shrinks that shared size until rules-height + gap + flavor-height
+fits the box. Only one of the two present (added independently, one at a
+time) falls back to the ordinary single-box `shrinkTextToFit` against
+the same computed box — no new algorithm needed for that case.
+
+**Power/toughness avoidance is a raised bottom bound, not per-line text
+wrapping around it.** True L-shaped wrapping (the box narrowing only for
+the lines that vertically overlap `powerToughness`) would need a custom
+per-line max-width, on top of a per-size word-wrap that already has to
+run twice (rules and flavor independently) inside the shrink search —
+more moving parts, more edge cases (a single long word that doesn't fit
+even the narrowed width at the font floor), for a benefit that only ever
+matters for the box's last line or two. Simply excluding
+`powerToughness`'s whole row from the box's height budget gets the same
+practical guarantee — text never overlaps it — for a small, rare cost in
+available height instead.
+
+The result is written directly onto the `rules`/`flavor` `TextLayer`s'
+own `x`/`y`/`width`/`height`/`fontSizePt` — same fields every other
+layer uses, computed once instead of live — so `LayerNode.tsx` and
+`services/render` need no special-case rendering for this pair at all;
+they just draw whatever's stored, like any other text field. Runs
+whenever there's something to (re-)fit: `Toolbar.tsx`'s
+`addAllTextFields`/`addTextField`/`importFromScryfall` fold the patch
+into the very layers they're about to commit rather than a separate
+follow-up commit (so e.g. "Add all fields" stays one undo step), and
+`PropertiesPanel.tsx`'s content textarea re-fits live while typing into
+either field, in the same `beginLiveEdit`/`updateLayerLive`/
+`commitLiveEdit` session as the edit itself — still one undo step once
+the field loses focus, not one per keystroke.
 
 ## Scryfall import
 

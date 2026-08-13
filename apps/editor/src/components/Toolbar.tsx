@@ -11,13 +11,14 @@ import { TextTemplateMenu } from "./TextTemplateMenu";
 import { ScryfallSearchModal } from "./ScryfallSearchModal";
 import { DesignLibraryModal } from "./DesignLibraryModal";
 import { getTextTemplates, type TextFieldTemplate } from "../textTemplates";
-import { getFrameAsset } from "../frameAssets";
 import { RARITY_ASSETS, getRarityAssetUrl } from "../rarityAssets";
 import { RARITY_DISPLAY_ORDER, RARITY_LAYER_ID, RARITY_SYMBOL_BOX, RARITY_DEFAULT_LOCKED, RARITY_DEFAULT_CONTENT_LOCKED } from "../rarityConfig";
 import { DEFAULT_FONT_FAMILY } from "../config";
 import { primaryCardFields, type ScryfallCard } from "../scryfall";
 import { designStorage } from "../designStorage";
 import { resolveArtWindowMm } from "../frameArtWindow";
+import { useActiveFrameCategory } from "../hooks/useActiveFrameCategory";
+import { computeRulesFlavorPatch } from "../rulesFlavorFit";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -40,6 +41,7 @@ export function Toolbar({
   const addLayersWithGroups = useDesignStore((s) => s.addLayersWithGroups);
   const replaceLayers = useDesignStore((s) => s.replaceLayers);
   const commitLayerChange = useDesignStore((s) => s.commitLayerChange);
+  const commitLayerChanges = useDesignStore((s) => s.commitLayerChanges);
   const selectedLayerIds = useDesignStore((s) => s.selectedLayerIds);
   const duplicateLayers = useDesignStore((s) => s.duplicateLayers);
   const removeLayers = useDesignStore((s) => s.removeLayers);
@@ -132,8 +134,7 @@ export function Toolbar({
   // text-template-library/<category>.json override (position/font/color
   // tuned to fit that frame), falling back to the base/default set when
   // no frame is present yet, or its category has no override of its own.
-  const activeFrameLayer = design.layers.find((l): l is Extract<Layer, { type: "frame" }> => l.type === "frame");
-  const activeFrameCategory = activeFrameLayer ? getFrameAsset(activeFrameLayer.assetId)?.category : undefined;
+  const activeFrameCategory = useActiveFrameCategory();
   const textTemplates = getTextTemplates(activeFrameCategory);
 
   const templateToLayer = (template: TextFieldTemplate): Layer => ({
@@ -180,7 +181,23 @@ export function Toolbar({
     height: template.height,
   });
 
-  const addTextField = (template: TextFieldTemplate) => addLayer(templateToLayer(template));
+  // Rules/flavor text share one automatically-sized boundary box (see
+  // rulesFlavorFit.ts) instead of each having its own fixed one — adding
+  // either re-fits the pair (or just the one, if the other isn't added
+  // yet) against the design's current typeline/legal-row/power-toughness
+  // layout. Folded into the same commit as the add itself where the
+  // layer being added is the one that moved (the common case: adding the
+  // first of the pair); the rarer case — adding the second when the
+  // first already exists — needs a second, immediate commit, since
+  // addLayer only ever adds the one new layer.
+  const addTextField = (template: TextFieldTemplate) => {
+    const layer = templateToLayer(template);
+    const patches = computeRulesFlavorPatch({ ...design, layers: [...design.layers, layer] }, textTemplates);
+    const ownPatch = patches?.find((p) => p.id === layer.id);
+    addLayer(ownPatch ? ({ ...layer, ...ownPatch.patch } as Layer) : layer);
+    const otherPatches = patches?.filter((p) => p.id !== layer.id) ?? [];
+    if (otherPatches.length > 0) commitLayerChanges(otherPatches);
+  };
 
   // The rarity-symbol image is a singleton, found-or-created by its fixed
   // id (RARITY_LAYER_ID) rather than tracked as separate UI state — see
@@ -254,7 +271,19 @@ export function Toolbar({
     const flavorId = layerIdByFieldId.get("flavor");
     if (rulesId && flavorId) groupDefs.push({ name: "Rules and flavour", layerIds: [rulesId, flavorId] });
 
-    addLayersWithGroups(newLayers, groupDefs);
+    // Fold rules/flavor's boundary-box fit (rulesFlavorFit.ts) into the
+    // same layers this is about to commit, rather than a separate
+    // follow-up commit — one undo step for "Add all fields", same as
+    // before.
+    const patches = computeRulesFlavorPatch({ ...design, layers: [...design.layers, ...newLayers] }, textTemplates);
+    const patchedLayers = patches
+      ? newLayers.map((l) => {
+          const patch = patches.find((p) => p.id === l.id);
+          return patch ? ({ ...l, ...patch.patch } as Layer) : l;
+        })
+      : newLayers;
+
+    addLayersWithGroups(patchedLayers, groupDefs);
   };
 
   const setRarity = (rarityId: string) => {
@@ -383,8 +412,20 @@ export function Toolbar({
       }
     }
 
+    // Rules and flavor (see rulesFlavorFit.ts) get re-fit against the
+    // typeline/legal-row/power-toughness fields this same import just
+    // added, before committing — same reasoning as addAllTextFields
+    // above, one undo step instead of two.
+    const patches = computeRulesFlavorPatch({ ...design, layers }, textTemplates);
+    const finalLayers = patches
+      ? layers.map((l) => {
+          const patch = patches.find((p) => p.id === l.id);
+          return patch ? ({ ...l, ...patch.patch } as Layer) : l;
+        })
+      : layers;
+
     const selectIds = [...(artLayer ? [artLayer.id] : []), ...textLayers.map((l) => l.id)];
-    replaceLayers(layers, selectIds);
+    replaceLayers(finalLayers, selectIds);
   };
 
   const addShape = () =>

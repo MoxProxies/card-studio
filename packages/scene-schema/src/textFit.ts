@@ -48,6 +48,68 @@ function tokenizeWord(word: string, resolveSymbol?: (token: string) => boolean):
 }
 
 /**
+ * Word-wraps `content` at a single fixed `fontSizePx` into `maxWidthPx` —
+ * the per-size layout step `shrinkTextToFit` below drives repeatedly while
+ * searching for a font size, and `combinedTextFit.ts` reuses directly to
+ * lay out two independently-styled blocks (e.g. rules + flavor text) at a
+ * shared candidate size without duplicating the word-wrap/inline-symbol
+ * logic. See `shrinkTextToFit`'s doc comment for what `measureWidth`/
+ * `resolveSymbol`/`symbolWidth` mean.
+ */
+export function layoutText(params: {
+  content: string;
+  fontSizePx: number;
+  maxWidthPx: number;
+  measureWidth: (text: string) => number;
+  resolveSymbol?: (token: string) => boolean;
+  symbolWidth?: (fontSizePx: number) => number;
+}): LineLayout[] {
+  const { content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth } = params;
+
+  const lines: LineLayout[] = [];
+  const spaceWidth = measureWidth(" ");
+  const symW = resolveSymbol && symbolWidth ? symbolWidth(fontSizePx) : 0;
+  const runWidth = (run: TextRun) => (run.kind === "symbol" ? symW : measureWidth(run.text));
+
+  for (const paragraph of content.split("\n")) {
+    const words = paragraph.split(" ").map((word) => tokenizeWord(word, resolveSymbol));
+    let currentWords: TextRun[][] = [];
+    let currentWidth = 0;
+
+    const flush = () => {
+      let x = 0;
+      const runs: PositionedRun[] = [];
+      currentWords.forEach((wordRuns, wi) => {
+        if (wi > 0) x += spaceWidth;
+        for (const run of wordRuns) {
+          const w = runWidth(run);
+          runs.push({ run, x, width: w });
+          x += w;
+        }
+      });
+      lines.push({ runs, width: x });
+      currentWords = [];
+      currentWidth = 0;
+    };
+
+    for (const wordRuns of words) {
+      const wordWidth = wordRuns.reduce((sum, run) => sum + runWidth(run), 0);
+      const additional = (currentWords.length > 0 ? spaceWidth : 0) + wordWidth;
+      if (currentWidth + additional > maxWidthPx && currentWords.length > 0) {
+        flush();
+        currentWords = [wordRuns];
+        currentWidth = wordWidth;
+      } else {
+        currentWords.push(wordRuns);
+        currentWidth += additional;
+      }
+    }
+    flush();
+  }
+  return lines;
+}
+
+/**
  * Word-wraps `content` to `maxWidthPx`, shrinking `startFontSizePx` in 1px
  * steps (down to a 4px floor) until the wrapped lines fit `maxHeightPx` —
  * the "shrink to fit" behavior for a text box. Kept generic over how width
@@ -100,59 +162,15 @@ export function shrinkTextToFit(params: {
     symbolWidth,
   } = params;
 
-  const layoutLines = (fontSizePx: number): LineLayout[] => {
-    const lines: LineLayout[] = [];
-    const spaceWidth = measureWidth(" ");
-    const symW = resolveSymbol && symbolWidth ? symbolWidth(fontSizePx) : 0;
-    const runWidth = (run: TextRun) => (run.kind === "symbol" ? symW : measureWidth(run.text));
-
-    for (const paragraph of content.split("\n")) {
-      const words = paragraph.split(" ").map((word) => tokenizeWord(word, resolveSymbol));
-      let currentWords: TextRun[][] = [];
-      let currentWidth = 0;
-
-      const flush = () => {
-        let x = 0;
-        const runs: PositionedRun[] = [];
-        currentWords.forEach((wordRuns, wi) => {
-          if (wi > 0) x += spaceWidth;
-          for (const run of wordRuns) {
-            const w = runWidth(run);
-            runs.push({ run, x, width: w });
-            x += w;
-          }
-        });
-        lines.push({ runs, width: x });
-        currentWords = [];
-        currentWidth = 0;
-      };
-
-      for (const wordRuns of words) {
-        const wordWidth = wordRuns.reduce((sum, run) => sum + runWidth(run), 0);
-        const additional = (currentWords.length > 0 ? spaceWidth : 0) + wordWidth;
-        if (currentWidth + additional > maxWidthPx && currentWords.length > 0) {
-          flush();
-          currentWords = [wordRuns];
-          currentWidth = wordWidth;
-        } else {
-          currentWords.push(wordRuns);
-          currentWidth += additional;
-        }
-      }
-      flush();
-    }
-    return lines;
-  };
-
   let fontSizePx = startFontSizePx;
   setFontSizePx(fontSizePx);
-  let lines = layoutLines(fontSizePx);
+  let lines = layoutText({ content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth });
 
   if (shrink) {
     while (lines.length * (fontSizePx * lineHeightRatio) > maxHeightPx && fontSizePx > minFontSizePx) {
       fontSizePx -= 1;
       setFontSizePx(fontSizePx);
-      lines = layoutLines(fontSizePx);
+      lines = layoutText({ content, fontSizePx, maxWidthPx, measureWidth, resolveSymbol, symbolWidth });
     }
   }
 

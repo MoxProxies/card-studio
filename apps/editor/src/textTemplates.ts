@@ -57,6 +57,29 @@ export interface TextFieldTemplate {
    * Entitlements.canEditLockedContent (apps/editor/src/entitlements.ts)
    * — the "premium" gate. */
   contentLocked?: boolean;
+  /** Rules/flavor-text coupling (see rulesFlavorFit.ts) — read only off
+   * the "rules" field's own template entry, since rules and flavor
+   * together occupy one shared, automatically-sized boundary box rather
+   * than each having its own fixed one. All three optional; omitting any
+   * (or all) falls back to rulesFlavorFit.ts's own defaults, and a
+   * template with no "rules" entry at all just never activates the
+   * coupling — rules/flavor (if added independently) keep behaving like
+   * any other independent text field.
+   *
+   * gapAboveTypelineMm: space between the typeline field's bottom edge
+   * and the top of the rules/flavor box.
+   * gapAboveLegalMm: space between the bottom of the rules/flavor box
+   * and whichever of edition/artist/signature sits topmost — and,
+   * separately, the minimum clearance kept above the power/toughness
+   * field, so the box's bottom edge is naturally raised to stay clear of
+   * it entirely rather than needing per-line text wrapping around it.
+   * flavorGapLines: gap between the rules block and the flavor block
+   * below it, in multiples of the shared line height (so it scales with
+   * whatever font size the pair ends up shrinking to).
+   */
+  gapAboveTypelineMm?: number;
+  gapAboveLegalMm?: number;
+  flavorGapLines?: number;
 }
 
 interface TextTemplateCatalog {
