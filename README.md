@@ -431,6 +431,24 @@ set them on `manaCost`'s entry in `text-template-library/_base.json` (or
 a specific frame category's override) to opt in, then
 `pnpm sync-text-templates`.
 
+**The generic-mana digit is optically centered, not metrics-centered.**
+`textBaseline: "middle"` (Canvas2D) / `verticalAlign: "middle"`
+(Konva.Text) both center using the font's *declared* ascent + descent —
+space reserved below the baseline for descenders (`g`, `y`, `p`, ...)
+that no digit has, so a plain "centered" digit reads visibly high in
+its circle regardless of which font is set. Both `drawGenericManaSymbol`
+(`renderDesign.ts`) and `LayerNode.tsx`'s equivalent instead measure the
+glyph's actual rendered ink via `measureText()`'s
+`actualBoundingBoxAscent`/`Descent`/`Left`/`Right` (real per-glyph
+extents, not font metrics) and manually position it so that ink — not
+the font's em-box — sits centered in the circle. `LayerNode.tsx` draws
+this via a Konva `Shape`'s `sceneFunc` rather than a `Text` node
+specifically to get raw canvas access for this (`Konva.Context` proxies
+`measureText`/`fillText`/`font`/`textAlign`/`textBaseline` straight
+through to the real 2D context) — a plain `<Text>` has no way to
+override its own metrics-based baseline positioning. Both engines run
+the identical formula, so the editor and the print export always agree.
+
 ## MTG text fields
 
 Text field placement/font/color is directory-driven and per-frame, the

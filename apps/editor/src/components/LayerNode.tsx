@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { Group, Image as KonvaImage, Rect, Ellipse, Circle, Text } from "react-konva";
+import { Group, Image as KonvaImage, Rect, Ellipse, Circle, Text, Shape } from "react-konva";
 import type Konva from "konva";
 import { computeObjectFit, shrinkTextToFit, type Layer } from "@card-studio/scene-schema";
 import { EDITOR_DPI, mmToStagePx } from "../geometry";
@@ -262,18 +262,34 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
               // symbol's instead of looking slightly larger.
               const circleDiameter = runWidth * GENERIC_MANA_CIRCLE_RATIO;
               const digitFontSize = Math.round(runWidth * 0.62 * (layer.manaDigitScale ?? 1));
+              const digitFont = `bold ${digitFontSize}px ${layer.fontFamily}`;
               return (
                 <Group key={key} x={drawX} y={lineY} listening={false}>
                   <Circle radius={circleDiameter / 2} x={runWidth / 2} y={runWidth / 2} fill="#cccccc" {...textShadowProps} />
-                  <Text
-                    text={run.text}
-                    width={runWidth}
-                    height={runWidth}
-                    align="center"
-                    verticalAlign="middle"
-                    fontSize={digitFontSize}
-                    fontStyle="bold"
-                    fontFamily={layer.fontFamily}
+                  {/* A plain <Text> here would center via verticalAlign="middle",
+                      which — like Canvas2D's textBaseline="middle" — positions
+                      using the font's *declared* ascent/descent, not the
+                      glyph's actual ink. A digit has no descender, so that
+                      declared-metrics "middle" reads visibly high in the
+                      circle. Drawing manually via a Shape's sceneFunc (raw
+                      canvas access, bypassing Konva's own text layout) lets
+                      this use the exact same measureText().actualBoundingBox*
+                      -based optical centering as renderDesign.ts's
+                      drawGenericManaSymbol, so the editor and the print
+                      export agree pixel-for-pixel. */}
+                  <Shape
+                    sceneFunc={(context, shape) => {
+                      const cx = runWidth / 2;
+                      const cy = runWidth / 2;
+                      context.font = digitFont;
+                      context.textAlign = "left";
+                      context.textBaseline = "alphabetic";
+                      const metrics = context.measureText(run.text);
+                      const tx = cx - (metrics.actualBoundingBoxRight - metrics.actualBoundingBoxLeft) / 2;
+                      const ty = cy + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+                      context.fillStyle = shape.fill();
+                      context.fillText(run.text, tx, ty);
+                    }}
                     fill="#000000"
                   />
                 </Group>

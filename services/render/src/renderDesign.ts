@@ -293,8 +293,18 @@ function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y:
   ctx.shadowColor = "transparent";
   ctx.fillStyle = "#000000";
   ctx.font = `bold ${Math.round(size * 0.62 * digitScale)}px ${fontFamily}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(digits, cx, cy);
+  // textBaseline="middle" centers using the font's *declared* ascent/
+  // descent — space reserved below the baseline for descenders (g, y,
+  // p, ...) that no digit has, so a "vertically centered" digit reads
+  // visibly high. Center on the glyph's actual rendered ink instead,
+  // via measureText's actualBoundingBox* — real per-glyph extents, not
+  // font metrics — same fix applied identically in LayerNode.tsx so
+  // the editor and this print path agree pixel-for-pixel.
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  const metrics = ctx.measureText(digits);
+  const drawX = cx - (metrics.actualBoundingBoxRight - metrics.actualBoundingBoxLeft) / 2;
+  const drawY = cy + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+  ctx.fillText(digits, drawX, drawY);
   ctx.restore();
 }
