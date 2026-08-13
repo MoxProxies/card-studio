@@ -1395,6 +1395,42 @@ target shape so both sides agree on the contract):
   the logged-in user's subscription and passing it in is the entire
   integration; nothing on the Card Studio side needs to change.
 
+### Deploying a local build to moxproxies-website
+
+There's no CI/CD for this — moxproxies-website's `public/vendor/card-studio/`
+is just a committed copy of `apps/editor/dist/embed/`'s output (see
+"Building the embed bundle" above), redeployed by hand each time: build,
+copy the whole `dist/embed/` folder over (not just the `.js` file — the
+`fonts/`/`frames/`/`rarity/`/`symbols/` sibling directories have to come
+with it), stamp `SOURCE_COMMIT` with the commit this build came from, commit
+on the moxproxies-website side.
+
+`scripts/deploy-to-moxproxies.sh` does the copy/stamp/commit half of that,
+given an already-built `dist/embed` dir, the target website checkout, and a
+commit hash:
+
+```bash
+pnpm run build   # in apps/editor
+scripts/deploy-to-moxproxies.sh apps/editor/dist/embed /path/to/moxproxies-website "$(git rev-parse HEAD)" [--push]
+```
+
+For a Windows checkout of this repo with moxproxies-website living under
+WSL (a Laravel app, so it typically runs there even when card-studio itself
+is native Windows) — `scripts/deploy-to-moxproxies.ps1` is a one-command
+wrapper: it builds on the Windows side (where this checkout's `node_modules`
+actually are), then calls the bash script above from WSL for the copy/
+commit half, so that runs natively against the website's own filesystem
+instead of over the slower/quirkier `\\wsl.localhost\...` UNC path.
+
+```powershell
+pnpm run deploy:moxproxies             # commits, doesn't push
+pnpm run deploy:moxproxies -- -Push    # also pushes
+```
+
+Both scripts default to the paths/distro this was first set up against
+(`WebsiteDir`/`WslDistro` params on the `.ps1`, first three positional args
+on the `.sh`) — override either if your layout differs.
+
 ## Not built yet
 
 - In-app frame/font/rarity-symbol/text-template upload (adding any of
