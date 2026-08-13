@@ -33,6 +33,13 @@ function getMeasureCtx(): CanvasRenderingContext2D {
   return measureCtx;
 }
 
+// Every symbol-library icon (symbol-library/*.svg) is a 64x64 viewBox with
+// a radius-30 circle — a 60/64 circle-to-canvas ratio, not edge-to-edge.
+// The generic-mana circle (drawn programmatically, not an SVG asset) has
+// to match that same ratio against its own box, or it reads visibly
+// bigger than every real colored mana symbol at the same nominal size.
+const GENERIC_MANA_CIRCLE_RATIO = 60 / 64;
+
 /** Renders one scene layer as Konva node(s). Position/transform math and
  * history commits live in CanvasStage — this component only forwards
  * gesture events for the node it owns. */
@@ -243,14 +250,21 @@ export function LayerNode({ layer, onSelect, registerRef, onDragStart, onDragMov
               );
             }
             if (isGenericManaToken(run.text)) {
-              // The circle is always runWidth (== fontSizePx, see
+              // The circle's own box is always runWidth (== fontSizePx, see
               // symbolWidth above) — layer.manaDigitScale only grows/
-              // shrinks the digit *within* that fixed circle, shrinking
-              // or growing its visible padding instead of the bubble.
+              // shrinks the digit *within* that fixed box, shrinking or
+              // growing its visible padding instead of the bubble. The
+              // circle itself is drawn at GENERIC_MANA_CIRCLE_RATIO of
+              // that box, not the full box — matching every real
+              // symbol-library icon's own circle-to-canvas proportion
+              // (viewBox 0 0 64 64, radius 30 -> 60/64), so a generic
+              // number's bubble reads the same size as a colored mana
+              // symbol's instead of looking slightly larger.
+              const circleDiameter = runWidth * GENERIC_MANA_CIRCLE_RATIO;
               const digitFontSize = Math.round(runWidth * 0.62 * (layer.manaDigitScale ?? 1));
               return (
                 <Group key={key} x={drawX} y={lineY} listening={false}>
-                  <Circle radius={runWidth / 2} x={runWidth / 2} y={runWidth / 2} fill="#cccccc" {...textShadowProps} />
+                  <Circle radius={circleDiameter / 2} x={runWidth / 2} y={runWidth / 2} fill="#cccccc" {...textShadowProps} />
                   <Text
                     text={run.text}
                     width={runWidth}

@@ -257,15 +257,24 @@ async function drawText(
   });
 }
 
+// Every symbol-library icon (symbol-library/*.svg) is a 64x64 viewBox
+// with a radius-30 circle — a 60/64 circle-to-canvas ratio, not
+// edge-to-edge. drawGenericManaSymbol's circle has to match that same
+// ratio against its own `size`, or a generic number's bubble reads
+// visibly bigger than every real colored mana symbol at the same
+// nominal size.
+const GENERIC_MANA_CIRCLE_RATIO = 60 / 64;
+
 /** Draws a generic mana cost number ({0}, {1}, {2}, ...) as a light-grey
  * circle with the digits centered on top — one routine covers every
  * possible value instead of needing a symbol-library SVG per number.
- * `size` is the circle's own fixed square footprint (always fontSizePx —
+ * `size` is the digit's own fixed square footprint (always fontSizePx —
  * see the call site's symbolWidth, which never scales it); `fontFamily`
  * is the layer's own, so the digit — real text, unlike the circle itself
  * — respects the field's configured font instead of a hardcoded one.
  * `digitScale` (TextLayer.manaDigitScale) grows/shrinks the *digit*
- * relative to that fixed circle — 1 (the default) keeps today's 0.62
+ * relative to the fixed-size circle drawn within `size` (see
+ * GENERIC_MANA_CIRCLE_RATIO above) — 1 (the default) keeps today's 0.62
  * proportion, higher values shrink the visible padding around it
  * without touching the circle's own size. */
 function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y: number, size: number, fontFamily: string, digitScale: number) {
@@ -273,7 +282,7 @@ function drawGenericManaSymbol(ctx: SKRSContext2D, digits: string, x: number, y:
   const cx = x + size / 2;
   const cy = y + size / 2;
   ctx.beginPath();
-  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+  ctx.arc(cx, cy, (size * GENERIC_MANA_CIRCLE_RATIO) / 2, 0, Math.PI * 2);
   ctx.fillStyle = "#cccccc";
   ctx.fill();
   // The circle above already carries the layer's text shadow (inherited
