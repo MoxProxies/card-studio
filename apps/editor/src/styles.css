@@ -32,6 +32,20 @@
   box-sizing: border-box;
 }
 
+/* :host only means anything inside a shadow root (see embed.ts) — inert,
+ * harmless no-op in the standalone build. Without it, <card-studio-editor>
+ * defaults to the UA stylesheet's `display: inline` for unknown/custom
+ * elements, which doesn't establish a normal block-level containing block:
+ * the inner container's `width: 100%` (embed.ts) then resolves against an
+ * ambiguous inline box that browsers happily *grow* to fit wide content
+ * (a resize to a wider window, or zooming out) but don't reliably
+ * *shrink* back down on a narrower resize, since inline layout doesn't
+ * recompute a stable preferred width the way a block box does. */
+:host {
+  display: block;
+  width: 100%;
+}
+
 /* Toolbar/side-panel chrome defaults to the warm surface color — the few
  * elements that need something else (the canvas viewport, modal backdrops)
  * set their own inline background, which wins over this. */
