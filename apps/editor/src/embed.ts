@@ -4,6 +4,7 @@ import { Design, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/s
 import { DesignProvider } from "./store/DesignProvider";
 import { createDesignStore, type DesignStore } from "./store/designStore";
 import { DEFAULT_ENTITLEMENTS, type Entitlements } from "./entitlements";
+import { resolveAiArtRequest, type AiArtResult } from "./aiArtBridge";
 import { App } from "./App";
 // Imported as raw strings (not injected into document.head) because this
 // element renders into a shadow root — a global <style> tag can't cross the
@@ -86,6 +87,22 @@ const embeddedFontFaces = fontFaces.replaceAll('url("/fonts/', `url("${ASSET_BAS
  * now does), so there's exactly one "Save" a user can find, not two that
  * quietly do different things (one to the host's backend, one to just
  * that browser's localStorage).
+ *
+ * `Entitlements.canGenerateAiArt` (second premium gate, separate from
+ * canEditLockedContent — same wiring: the `can-generate-ai-art` boolean
+ * attribute at mount, or live via `.setEntitlements()`) controls whether
+ * the toolbar's "AI Art" prompt is enabled. Actually generating an image
+ * is a round trip through the host page, not this element: when the
+ * shopper submits a prompt, the element dispatches a bubbling, composed
+ * "ai-art-request" CustomEvent (detail: `{ requestId, prompt }`). The
+ * host page's own JS listens for that, calls its own backend (which
+ * injects framing/style/aspect-ratio instructions automatically, and
+ * re-checks the account's premium status server-side — the attribute
+ * above only gates the UI, it isn't itself an authorization check), and
+ * calls `.completeAiArtRequest(requestId, { src })` (or `{ error }` on
+ * failure) back on this element once it has a result. This element never
+ * calls an image-generation API or holds a credential of its own — see
+ * aiArtBridge.ts.
  */
 export class CardStudioEditorElement extends HTMLElement {
   #root: Root | null = null;
@@ -142,6 +159,15 @@ export class CardStudioEditorElement extends HTMLElement {
     this.#store?.getState().setEntitlements(entitlements);
   }
 
+  /** Resolves (or rejects, on `{ error }`) the AiArtModal request matching
+   * `requestId` — call this once the host page's backend responds to the
+   * "ai-art-request" event this element dispatched (see aiArtBridge.ts
+   * and this class's doc comment). A requestId with no matching pending
+   * request (e.g. the modal was already closed) is silently ignored. */
+  completeAiArtRequest(requestId: string, result: AiArtResult): void {
+    resolveAiArtRequest(requestId, result);
+  }
+
   #readInitialDesign(): Design {
     const raw = this.getAttribute("initial-design");
     if (raw) {
@@ -155,7 +181,11 @@ export class CardStudioEditorElement extends HTMLElement {
   }
 
   #readInitialEntitlements(): Entitlements {
-    return { ...DEFAULT_ENTITLEMENTS, canEditLockedContent: this.hasAttribute("can-edit-locked-content") };
+    return {
+      ...DEFAULT_ENTITLEMENTS,
+      canEditLockedContent: this.hasAttribute("can-edit-locked-content"),
+      canGenerateAiArt: this.hasAttribute("can-generate-ai-art"),
+    };
   }
 }
 

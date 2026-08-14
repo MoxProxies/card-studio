@@ -21,6 +21,13 @@ export interface Entitlements {
    * "premium" gate. Doesn't affect `locked` at all; every user can
    * always toggle that regardless of this. */
   canEditLockedContent: boolean;
+  /** Can open Toolbar.tsx's "AI Art" prompt (AiArtModal.tsx) — a separate
+   * premium gate from canEditLockedContent above (a host could plausibly
+   * grant one without the other). See aiArtBridge.ts and embed.ts's
+   * "ai-art-request" event / completeAiArtRequest() for how the actual
+   * generation call round-trips through the host page — this package
+   * never calls an image-generation API itself. */
+  canGenerateAiArt: boolean;
 }
 
-export const DEFAULT_ENTITLEMENTS: Entitlements = { canEditLockedContent: false };
+export const DEFAULT_ENTITLEMENTS: Entitlements = { canEditLockedContent: false, canGenerateAiArt: false };

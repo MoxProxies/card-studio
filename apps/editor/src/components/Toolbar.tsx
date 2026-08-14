@@ -2,13 +2,14 @@ import { useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import type { Layer } from "@card-studio/scene-schema";
-import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Scissors, Save, Maximize2, Minimize2 } from "lucide-react";
+import { Frame, Type, Shapes, ImageUp, Undo2, Redo2, Copy, Trash2, Download, Ruler, Search, Sparkles, Scissors, Save, Maximize2, Minimize2 } from "lucide-react";
 import { useDesignStore } from "../store/DesignProvider";
 import { PRINT_DPI, createEmptyDesign, STANDARD_CARD_SIZE_MM } from "@card-studio/scene-schema";
 import { exportStageToPngDataUrl } from "../export";
 import { FrameLibraryModal } from "./FrameLibraryModal";
 import { TextTemplateMenu } from "./TextTemplateMenu";
 import { ScryfallSearchModal } from "./ScryfallSearchModal";
+import { AiArtModal } from "./AiArtModal";
 import { DesignLibraryModal } from "./DesignLibraryModal";
 import { getTextTemplates, type TextFieldTemplate } from "../textTemplates";
 import { RARITY_ASSETS, getRarityAssetUrl } from "../rarityAssets";
@@ -62,6 +63,7 @@ export function Toolbar({
   const panY = useDesignStore((s) => s.panY);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
   const [showScryfallSearch, setShowScryfallSearch] = useState(false);
+  const [showAiArtModal, setShowAiArtModal] = useState(false);
   const [showDesignLibrary, setShowDesignLibrary] = useState(false);
 
   const centerBox = () => {
@@ -451,6 +453,40 @@ export function Toolbar({
     replaceLayers(finalLayers, selectIds, groupDefs);
   };
 
+  /**
+   * Places a freshly-generated AI art image (AiArtModal.tsx, via
+   * aiArtBridge.ts) into the frame's illustration window — same sizing
+   * and same "beneath the frame" stacking as importFromScryfall's art
+   * layer above, since it's filling the identical role, just from a
+   * prompt instead of a real card's art_crop.
+   */
+  const addAiArtLayer = (src: string) => {
+    const artLayer: Layer = {
+      id: newId(),
+      name: "AI Art",
+      type: "image",
+      src,
+      fit: "cover",
+      rotationDeg: 0,
+      opacity: 1,
+      visible: true,
+      locked: false,
+      contentLocked: false,
+      ...resolveArtWindowMm(activeFrameCategory, design.size),
+    };
+
+    const frameIndex = design.layers.findIndex((l) => l.type === "frame");
+    if (frameIndex === -1) {
+      addLayer(artLayer);
+    } else {
+      const layers = [...design.layers];
+      layers.splice(frameIndex, 0, artLayer);
+      replaceLayers(layers, [artLayer.id]);
+    }
+
+    setShowAiArtModal(false);
+  };
+
   const addShape = () =>
     addLayer({
       id: newId(),
@@ -538,6 +574,18 @@ export function Toolbar({
       </select>
       <button className="cs-btn" onClick={() => setShowScryfallSearch(true)} title="Look up a real card and fill in its text fields, art, and rarity">
         <Search size={16} /> Scryfall
+      </button>
+      <button
+        className="cs-btn"
+        onClick={() => setShowAiArtModal(true)}
+        disabled={!entitlements.canGenerateAiArt}
+        title={
+          entitlements.canGenerateAiArt
+            ? "Generate an illustration from a text prompt"
+            : "Premium feature — upgrade for AI art generation"
+        }
+      >
+        <Sparkles size={16} /> AI Art
       </button>
 
       <div className="cs-divider" />
@@ -645,6 +693,8 @@ export function Toolbar({
           onClose={() => setShowScryfallSearch(false)}
         />
       )}
+
+      {showAiArtModal && <AiArtModal onGenerated={addAiArtLayer} onClose={() => setShowAiArtModal(false)} />}
     </div>
   );
 }

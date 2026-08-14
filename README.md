@@ -927,26 +927,28 @@ account casually drag that same text out of position — hence two
 separate flags instead of one.
 
 **`Entitlements`** (`apps/editor/src/entitlements.ts`) is a small,
-deliberately dumb interface — `{ canEditLockedContent: boolean }` — not a
-token, session, or user object. Card Studio has no auth of its own (see
-[How this is meant to connect to
+deliberately dumb interface — `{ canEditLockedContent: boolean;
+canGenerateAiArt: boolean }` — not a token, session, or user object. Card
+Studio has no auth of its own (see [How this is meant to connect to
 moxproxies-website](#how-this-is-meant-to-connect-to-moxproxies-website)),
-so it never decides who's premium; it just holds the one boolean answer
-and reacts to it. `DEFAULT_ENTITLEMENTS` (`canEditLockedContent: false`)
-is what a design starts with absent any other signal.
+so it never decides who's premium; it just holds the boolean answers and
+reacts to them. `DEFAULT_ENTITLEMENTS` (both flags `false`) is what a
+design starts with absent any other signal.
 `designStore.ts`'s `createDesignStore` takes an optional initial value,
 and the store exposes a `setEntitlements` action for changing it later —
-`<card-studio-editor>` (`embed.ts`) surfaces both halves of that: a
-`can-edit-locked-content` boolean attribute read once at mount (for a
-host that already knows the answer synchronously) and a
-`.setEntitlements()` method for calling any time after (for a host
-resolving an async auth/subscription check). When
-moxproxies-website's real premium check exists, the host page computes
-`canEditLockedContent` from its own session and passes it in one of
-those two ways — nothing on the Card Studio side needs to change. The
-standalone dev entry point (`main.tsx`, `pnpm dev:editor`) has its own
-throwaway wiring for this — `?premium=1` in the URL — that's local-only
-scaffolding, not part of the embed's real integration surface.
+`<card-studio-editor>` (`embed.ts`) surfaces both halves of that for each
+flag: a boolean attribute read once at mount (`can-edit-locked-content`,
+`can-generate-ai-art`; for a host that already knows the answer
+synchronously) and a `.setEntitlements()` method for calling any time
+after (for a host resolving an async auth/subscription check).
+moxproxies-website's real Stripe-backed premium check
+(`User::isPremium()`, see [AI art generation](#ai-art-generation)) drives
+both flags from the same subscription state, computed server-side and
+passed in one of those two ways — nothing on the Card Studio side needs
+to change as that check evolves. The standalone dev entry point
+(`main.tsx`, `pnpm dev:editor`) has its own throwaway wiring for this —
+`?premium=1` in the URL — that's local-only scaffolding, not part of the
+embed's real integration surface.
 
 **`artist`, `signature`, and the rarity/set-symbol layer default to both
 locks on.** The first two via their `text-template-library/*.json`
@@ -971,6 +973,45 @@ rotate handles stayed active even though drag was already correctly
 blocked; and the properties panel's X/Y/Width/Height/Rotation inputs had
 no `disabled` gating on `locked` at all, so retyping coordinates by hand
 always worked regardless of the lock.
+
+## AI art generation
+
+Toolbar.tsx's "AI Art" button opens `AiArtModal.tsx` — a free-text prompt
+box for generating a single illustration and dropping it into the
+current frame's art window (same sizing as [Scryfall
+import](#scryfall-import)'s art layer, via `resolveArtWindowMm`). It's
+gated by `Entitlements.canGenerateAiArt` (see [Field
+locking](#field-locking) for how entitlements generally work) — the
+button is disabled with an upgrade-prompt tooltip when that's false.
+
+This package never calls an image-generation API or holds a credential
+of its own. Submitting the modal calls `aiArtBridge.ts`'s
+`requestAiArt()`, which dispatches a bubbling, composed `ai-art-request`
+CustomEvent (detail: `{ requestId, prompt }`, see [How this is meant to
+connect to
+moxproxies-website](#how-this-is-meant-to-connect-to-moxproxies-website))
+and returns a Promise that the bridge resolves once the host page calls
+`<card-studio-editor>`'s `.completeAiArtRequest(requestId, { src })` (or
+`{ error }`) back. There's no timeout — a slow generation call is the
+host's problem to bound, not this package's to guess a deadline for.
+
+The actual generation happens entirely on the moxproxies-website side
+(a separate repo): `StudioAiArtController::generate()` re-checks
+`User::isPremium()` server-side (the client-side entitlement above is a
+UI convenience only, never the real authorization boundary), renders
+`resources/views/components/ai/prompts/card-art.blade.php` — which
+prepends framing/style/no-text/no-frame instructions to the shopper's
+raw prompt automatically, so nobody has to type "no card frame, just the
+illustration, landscape" themselves — and calls OpenAI's `gpt-image-1`
+at the fixed size configured in `config/card_studio.php`'s `ai_art`
+block (`1536x1024`; that model only accepts three fixed sizes, no
+arbitrary aspect ratio). The response comes back as a `data:` URI rather
+than an uploaded/stored asset: it becomes the new layer's `src` exactly
+like any other image layer, and there's no separate storage/CORS
+question to solve since a `data:` URI needs no cross-origin fetch to
+render on `<img crossOrigin="anonymous">` (`useHtmlImage.ts`) or to load
+server-side for print export (`@napi-rs/canvas`'s `loadImage` accepts
+`data:` URIs directly, same as any other source).
 
 ## Design decisions
 
@@ -1259,6 +1300,24 @@ fix (Vite's `base` config), not just changing the string.
   `resources/js/card-studio-editor.js` listens for this and temporarily
   lowers `#navbar`'s z-index for exactly as long as `detail.fullscreen`
   is true.
+
+  It also dispatches `ai-art-request` (detail: `{ requestId: string,
+  prompt: string }`) when the toolbar's "AI Art" modal is submitted (see
+  [AI art generation](#ai-art-generation) and `aiArtBridge.ts`). This
+  element never calls an image-generation API itself — the host page
+  listens for the event, calls its own backend, and calls
+  `.completeAiArtRequest(requestId, { src })` (or `{ error }` on
+  failure) back on this element once it has a result, which resolves (or
+  rejects) the modal's pending request and — on success — inserts the
+  image as a new layer sized to the current frame's art window.
+  moxproxies-website's `resources/js/card-studio-editor.js` is the
+  reference implementation of that listener. Whether the modal can even
+  be opened is gated client-side by `Entitlements.canGenerateAiArt` (the
+  `can-generate-ai-art` attribute / `.setEntitlements()`, same wiring as
+  `canEditLockedContent` above) — that's a UI convenience only, not an
+  authorization boundary, since the host's backend re-checks the
+  account's premium status server-side regardless of what this element
+  was told.
 
   Several pitfalls specific to this shadow-DOM/library-mode build, all
   found by actually loading the built bundle in a plain host page rather
