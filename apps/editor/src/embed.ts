@@ -5,6 +5,7 @@ import { DesignProvider } from "./store/DesignProvider";
 import { createDesignStore, type DesignStore } from "./store/designStore";
 import { DEFAULT_ENTITLEMENTS, type Entitlements } from "./entitlements";
 import { resolveAiArtRequest, type AiArtResult } from "./aiArtBridge";
+import type { GeneratedCardFields } from "./generatedCardFields";
 import { App } from "./App";
 // Imported as raw strings (not injected into document.head) because this
 // element renders into a shadow root — a global <style> tag can't cross the
@@ -103,6 +104,27 @@ const embeddedFontFaces = fontFaces.replaceAll('url("/fonts/', `url("${ASSET_BAS
  * failure) back on this element once it has a result. This element never
  * calls an image-generation API or holds a credential of its own — see
  * aiArtBridge.ts.
+ *
+ * `generated-fields` (JSON attribute, read once at mount): pre-populates
+ * a brand-new design from moxproxies-website's AI card-generation wizard
+ * — a chat flow, hosted entirely on the moxproxies-website side, that
+ * uses Claude to turn a shopper's free-text prompt (plus a few clarifying
+ * answers) into a structured set of card fields *before* this element is
+ * ever mounted. The attribute's value is `{ fields: GeneratedCardFields,
+ * frameAssetId?: string }` (see generatedCardFields.ts) — the same field
+ * shape importFromScryfall already turns into layers (Toolbar.tsx's
+ * applyGeneratedFields, generalized from what used to be Scryfall-import-
+ * only logic), plus an optional frame to add first, since a wizard
+ * building a design from nothing has to choose one itself, unlike
+ * Scryfall import applying against whatever frame (if any) is already on
+ * the canvas. Applied once, automatically, by a mount effect in
+ * Toolbar.tsx — the resulting layers are this design's actual first
+ * state, not a separate action the shopper has to trigger. Invalid JSON
+ * (or a payload missing `fields.name`) is logged and ignored, same as an
+ * invalid `initial-design`; don't pass both attributes on the same
+ * element, `initial-design` always wins since a design already being
+ * edited should never get silently reshuffled by wizard output meant for
+ * a fresh one.
  */
 export class CardStudioEditorElement extends HTMLElement {
   #root: Root | null = null;
@@ -127,7 +149,16 @@ export class CardStudioEditorElement extends HTMLElement {
 
     const initialDesign = this.#readInitialDesign();
     const initialEntitlements = this.#readInitialEntitlements();
-    this.#store = createDesignStore(initialDesign, initialEntitlements, this.hasAttribute("hide-local-design-library"));
+    // initial-design always wins if both are somehow present — a design
+    // already being edited should never get silently reshuffled by
+    // wizard output meant for a fresh one.
+    const pendingGeneratedCard = this.hasAttribute("initial-design") ? null : this.#readPendingGeneratedCard();
+    this.#store = createDesignStore(
+      initialDesign,
+      initialEntitlements,
+      this.hasAttribute("hide-local-design-library"),
+      pendingGeneratedCard
+    );
     this.#store.subscribe((state) => {
       this.dispatchEvent(
         new CustomEvent("design-change", { detail: state.design, bubbles: true, composed: true })
@@ -186,6 +217,19 @@ export class CardStudioEditorElement extends HTMLElement {
       canEditLockedContent: this.hasAttribute("can-edit-locked-content"),
       canGenerateAiArt: this.hasAttribute("can-generate-ai-art"),
     };
+  }
+
+  #readPendingGeneratedCard(): { fields: GeneratedCardFields; frameAssetId?: string } | null {
+    const raw = this.getAttribute("generated-fields");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { fields?: GeneratedCardFields; frameAssetId?: string };
+      if (!parsed.fields?.name) throw new Error("missing fields.name");
+      return { fields: parsed.fields, frameAssetId: parsed.frameAssetId };
+    } catch (err) {
+      console.error("[card-studio] invalid generated-fields attribute, ignoring.", err);
+      return null;
+    }
   }
 }
 

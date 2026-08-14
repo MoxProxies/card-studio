@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Design, Layer, LayerGroup } from "@card-studio/scene-schema";
 import { type Entitlements, DEFAULT_ENTITLEMENTS } from "../entitlements";
+import type { GeneratedCardFields } from "../generatedCardFields";
 
 const HISTORY_LIMIT = 50;
 export const MIN_ZOOM = 0.1;
@@ -109,6 +110,18 @@ export interface DesignState {
   panX: number;
   panY: number;
 
+  /** A design's worth of AI-generated field values (moxproxies-website's
+   * AI card-generation wizard — see embed.ts's `generated-fields`
+   * attribute), waiting to be applied by Toolbar.tsx's one-time mount
+   * effect via applyGeneratedFields. Set once at store creation, same as
+   * initialDesign/initialEntitlements; not itself part of the design or
+   * undo history, since applying it *produces* the design's actual first
+   * undo-history entry. Consumed and cleared (clearPendingGeneratedCard)
+   * the moment that effect runs — never re-applied if the design later
+   * reloads or a component remounts. */
+  pendingGeneratedCard: { fields: GeneratedCardFields; frameAssetId?: string } | null;
+  clearPendingGeneratedCard: () => void;
+
   toggleSafeArea: () => void;
   toggleBleed: () => void;
   setEntitlements: (entitlements: Entitlements) => void;
@@ -197,7 +210,8 @@ export interface DesignState {
 export function createDesignStore(
   initialDesign: Design,
   initialEntitlements: Entitlements = DEFAULT_ENTITLEMENTS,
-  hideLocalDesignLibrary: boolean = false
+  hideLocalDesignLibrary: boolean = false,
+  pendingGeneratedCard: { fields: GeneratedCardFields; frameAssetId?: string } | null = null
 ) {
   return create<DesignState>((set) => ({
     design: initialDesign,
@@ -212,7 +226,9 @@ export function createDesignStore(
     zoom: 1,
     panX: 0,
     panY: 0,
+    pendingGeneratedCard,
 
+    clearPendingGeneratedCard: () => set({ pendingGeneratedCard: null }),
     toggleSafeArea: () => set((state) => ({ showSafeArea: !state.showSafeArea })),
     toggleBleed: () => set((state) => ({ showBleed: !state.showBleed })),
     setEntitlements: (entitlements) => set({ entitlements }),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type Konva from "konva";
 import type { RefObject } from "react";
 import type { Layer } from "@card-studio/scene-schema";
@@ -18,8 +18,10 @@ import { DEFAULT_FONT_FAMILY } from "../config";
 import { primaryCardFields, type ScryfallCard } from "../scryfall";
 import { designStorage } from "../designStorage";
 import { resolveArtWindowMm } from "../frameArtWindow";
+import { getFrameAsset } from "../frameAssets";
 import { useActiveFrameCategory } from "../hooks/useActiveFrameCategory";
 import { computeRulesFlavorPatch } from "../rulesFlavorFit";
+import type { GeneratedCardFields } from "../generatedCardFields";
 
 function newId(): string {
   return crypto.randomUUID();
@@ -58,6 +60,8 @@ export function Toolbar({
   const loadDesign = useDesignStore((s) => s.loadDesign);
   const entitlements = useDesignStore((s) => s.entitlements);
   const hideLocalDesignLibrary = useDesignStore((s) => s.hideLocalDesignLibrary);
+  const pendingGeneratedCard = useDesignStore((s) => s.pendingGeneratedCard);
+  const clearPendingGeneratedCard = useDesignStore((s) => s.clearPendingGeneratedCard);
   const zoom = useDesignStore((s) => s.zoom);
   const panX = useDesignStore((s) => s.panX);
   const panY = useDesignStore((s) => s.panY);
@@ -303,8 +307,30 @@ export function Toolbar({
     addLayer(buildRarityLayer(rarityId, url));
   };
 
-  const addImage = (file: File) => {
-    const src = URL.createObjectURL(file);
+  // Reads the file as a data: URI rather than URL.createObjectURL's blob:
+  // URL — a blob: URL is only a live reference into this tab's memory: it
+  // stops resolving the moment the tab closes (or, in practice, far
+  // sooner — nothing in this app ever explicitly keeps the underlying
+  // Blob alive), so a design saved with one appears fine right up until
+  // the next reload, at which point that layer's image silently
+  // disappears, and services/render's server-side print export (which
+  // fetches each layer's `src` from a separate process entirely) could
+  // never have loaded it to begin with. A data: URI has neither problem
+  // — it's the design's own data, same as an AI-generated art layer's
+  // src (see AiArtModal.tsx / aiArtBridge.ts, which never had a blob:
+  // URL option to begin with) — at the cost of bloating the saved design
+  // JSON by the image's full encoded size, an accepted tradeoff here
+  // since there's no S3/CORS story to solve for either origin otherwise.
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+      reader.readAsDataURL(file);
+    });
+
+  const addImage = async (file: File) => {
+    const src = await readFileAsDataUrl(file);
     // Default to the full-bleed canvas, edge to edge, same as "Add Frame"
     // — not a box aspect-fit to the image's own shape. Aspect-fitting used
     // to be the default (see git history) to stop random art crops from
@@ -337,73 +363,103 @@ export function Toolbar({
     });
   };
 
-  // Field id -> Scryfall value, mirroring the ids text-template-library/
-  // fields use (title/manaCost/typeline/rules/flavor/powerToughness/
-  // artist) so each maps onto the matching resolved template. Nickname,
-  // signature, and edition have no Scryfall equivalent and are
-  // deliberately left out — nothing to fill them with.
-  const scryfallFieldValues = (fields: ReturnType<typeof primaryCardFields>): Record<string, string | undefined> => ({
+  // Field id -> value, mirroring the ids text-template-library/ fields use
+  // (title/manaCost/typeline/rules/flavor/powerToughness/artist) so each
+  // maps onto the matching resolved template. Nickname, signature, and
+  // edition have no generated-field equivalent and are deliberately left
+  // out — nothing to fill them with.
+  const fieldValues = (fields: GeneratedCardFields): Record<string, string | undefined> => ({
     title: fields.name,
     manaCost: fields.manaCost || undefined,
     typeline: fields.typeLine || undefined,
-    rules: fields.oracleText || undefined,
+    rules: fields.rulesText || undefined,
     flavor: fields.flavorText || undefined,
     powerToughness: fields.powerToughness || undefined,
     artist: fields.artist ? `Illus. ${fields.artist}` : undefined,
   });
 
   /**
-   * Adds all the text fields (and the card's own art, and its rarity
-   * symbol) a Scryfall card has data for, as one undo step. Only fields
-   * with an actual value get added — no placeholder text for e.g. a card
-   * with no flavor text. Applies the same default groupings as "Add all
+   * Adds all the text fields (and art, and a rarity symbol) a
+   * GeneratedCardFields value has data for, as one undo step — shared by
+   * importFromScryfall (below, adapting a ScryfallCard into this shape)
+   * and the AI card-generation wizard's `generated-fields` payload
+   * (embed.ts / designStore.ts's pendingGeneratedCard). Only fields with
+   * an actual value get added — no placeholder text for e.g. a card with
+   * no flavor text. Applies the same default groupings as "Add all
    * fields" (addAllTextFields above) — title+mana cost, typeline+rarity,
    * rules+flavour — restricted to whichever pairs this card actually had
    * both members for.
+   *
+   * `frameAssetId`, when given, adds a brand-new frame layer of that
+   * asset and lays fields out against *its* category — the AI wizard
+   * builds a design from nothing, so it has to choose a frame itself.
+   * Left undefined (Scryfall import's case), fields apply against
+   * whatever frame — if any — is already on the canvas, unchanged from
+   * before this was generalized.
    */
-  const importFromScryfall = (card: ScryfallCard) => {
-    const fields = primaryCardFields(card);
-    const values = scryfallFieldValues(fields);
+  const applyGeneratedFields = (fields: GeneratedCardFields, frameAssetId?: string) => {
+    const frameAsset = frameAssetId ? getFrameAsset(frameAssetId) : undefined;
+    const targetCategory = frameAsset?.category ?? activeFrameCategory;
+    const targetTemplates = frameAsset ? getTextTemplates(targetCategory) : textTemplates;
+    const values = fieldValues(fields);
 
-    const importedTemplates = textTemplates.filter((template) => values[template.id]);
+    const importedTemplates = targetTemplates.filter((template) => values[template.id]);
     const textLayers = importedTemplates.map((template) => ({ ...templateToLayer(template), content: values[template.id]! }));
+
+    const frameLayer: Layer | undefined = frameAsset
+      ? {
+          id: newId(),
+          name: "Frame",
+          type: "frame",
+          assetId: frameAsset.id,
+          rotationDeg: 0,
+          opacity: 1,
+          visible: true,
+          locked: false,
+          contentLocked: false,
+          x: 0,
+          y: 0,
+          width: design.size.widthMm,
+          height: design.size.heightMm,
+        }
+      : undefined;
 
     // Sized to the frame's actual illustration window, not the full-bleed
     // card — unlike addImage's default (a full pre-made card scan, already
-    // shaped like the whole card), Scryfall's `art_crop` is just the
-    // illustration on its own, a much more landscape aspect ratio than the
-    // card itself. Stretching it full-bleed with `fit: "cover"` (the old
-    // behavior) forced that landscape image through a tall, narrow box,
-    // cropping away roughly half of it on the sides. `fit: "cover"` within
-    // the actual (much closer-to-landscape) window still crops to fill —
-    // that's unavoidable without knowing the source crop's exact aspect —
-    // but nowhere near as much, and the result actually lands where a
+    // shaped like the whole card), this is just the illustration on its
+    // own, a much more landscape aspect ratio than the card itself.
+    // Stretching it full-bleed with `fit: "cover"` (the old behavior)
+    // forced that landscape image through a tall, narrow box, cropping
+    // away roughly half of it on the sides. `fit: "cover"` within the
+    // actual (much closer-to-landscape) window still crops to fill —
+    // that's unavoidable without knowing the source image's exact aspect
+    // — but nowhere near as much, and the result actually lands where a
     // card's illustration goes instead of behind the whole frame.
-    const artLayer: Layer | undefined = fields.artCropUrl
+    const artLayer: Layer | undefined = fields.imageSrc
       ? {
           id: newId(),
           name: `${fields.name} (art)`,
           type: "image",
-          src: fields.artCropUrl,
+          src: fields.imageSrc,
           fit: "cover",
           rotationDeg: 0,
           opacity: 1,
           visible: true,
           locked: false,
           contentLocked: false,
-          ...resolveArtWindowMm(activeFrameCategory, design.size),
+          ...resolveArtWindowMm(targetCategory, design.size),
         }
       : undefined;
 
-    // Art belongs *beneath* the frame (so the frame's transparent art
-    // window shows it) while text belongs on top of everything — addLayers
-    // always appends at the top, which can't express both in one step, so
-    // this builds the full array directly and commits it via replaceLayers.
+    // Frame and art both belong *beneath* existing/new text — addLayers
+    // always appends at the top, which can't express that, so this builds
+    // the full array directly and commits it via replaceLayers.
     const layers = [...design.layers];
+    if (frameLayer) layers.unshift(frameLayer);
     if (artLayer) {
       const frameIndex = layers.findIndex((l) => l.type === "frame");
       if (frameIndex === -1) layers.unshift(artLayer);
-      else layers.splice(frameIndex, 0, artLayer);
+      else layers.splice(frameIndex + 1, 0, artLayer);
     }
     layers.push(...textLayers);
 
@@ -418,10 +474,10 @@ export function Toolbar({
     }
 
     // Rules and flavor (see rulesFlavorFit.ts) get re-fit against the
-    // typeline/legal-row/power-toughness fields this same import just
+    // typeline/legal-row/power-toughness fields this same call just
     // added, before committing — same reasoning as addAllTextFields
     // above, one undo step instead of two.
-    const patches = computeRulesFlavorPatch({ ...design, layers }, textTemplates);
+    const patches = computeRulesFlavorPatch({ ...design, layers }, targetTemplates);
     const finalLayers = patches
       ? layers.map((l) => {
           const patch = patches.find((p) => p.id === l.id);
@@ -430,14 +486,13 @@ export function Toolbar({
       : layers;
 
     // Same default groupings as "Add all fields" (addAllTextFields above),
-    // restricted to whichever fields this particular card actually had
-    // values for — e.g. a card with no flavor text never gets a "Rules and
-    // flavour" group, since there's only one member to put in it.
-    // groupContiguous (designStore.ts) silently skips any def that
-    // resolves to fewer than two real layers, so it's safe to always
-    // include "Typeline and rarity" whenever typeline was imported: it
-    // just no-ops if no rarity layer (pre-existing, updated in place, or
-    // added by this same import above) ends up in finalLayers.
+    // restricted to whichever fields were actually supplied — e.g. no
+    // flavor text means no "Rules and flavour" group, since there's only
+    // one member to put in it. groupContiguous (designStore.ts) silently
+    // skips any def that resolves to fewer than two real layers, so it's
+    // safe to always include "Typeline and rarity" whenever typeline was
+    // supplied: it just no-ops if no rarity layer (pre-existing, updated
+    // in place, or added by this same call above) ends up in finalLayers.
     const layerIdByFieldId = new Map(importedTemplates.map((t, i) => [t.id, textLayers[i]!.id]));
     const groupDefs: Array<{ name: string; layerIds: string[] }> = [];
     const titleId = layerIdByFieldId.get("title");
@@ -449,9 +504,37 @@ export function Toolbar({
     const flavorId = layerIdByFieldId.get("flavor");
     if (rulesId && flavorId) groupDefs.push({ name: "Rules and flavour", layerIds: [rulesId, flavorId] });
 
-    const selectIds = [...(artLayer ? [artLayer.id] : []), ...textLayers.map((l) => l.id)];
+    const selectIds = [...(frameLayer ? [frameLayer.id] : []), ...(artLayer ? [artLayer.id] : []), ...textLayers.map((l) => l.id)];
     replaceLayers(finalLayers, selectIds, groupDefs);
   };
+
+  const importFromScryfall = (card: ScryfallCard) => {
+    const fields = primaryCardFields(card);
+    applyGeneratedFields({
+      name: fields.name,
+      manaCost: fields.manaCost,
+      typeLine: fields.typeLine,
+      rulesText: fields.oracleText,
+      flavorText: fields.flavorText,
+      powerToughness: fields.powerToughness,
+      artist: fields.artist,
+      rarity: fields.rarity,
+      imageSrc: fields.artCropUrl,
+    });
+  };
+
+  // Applies the AI card-generation wizard's payload (embed.ts's
+  // `generated-fields` attribute) exactly once, using this very first
+  // render's empty design/no-frame state — pendingGeneratedCard only
+  // starts non-null when that attribute was present at mount, and
+  // clearing it immediately after is what keeps this from ever firing
+  // again (a design reload, a re-mount, StrictMode's dev-only double
+  // invoke — none of those see a non-null value a second time).
+  useEffect(() => {
+    if (!pendingGeneratedCard) return;
+    applyGeneratedFields(pendingGeneratedCard.fields, pendingGeneratedCard.frameAssetId);
+    clearPendingGeneratedCard();
+  }, [pendingGeneratedCard]);
 
   /**
    * Places a freshly-generated AI art image (AiArtModal.tsx, via

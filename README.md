@@ -752,6 +752,35 @@ URLs and response shape are Scryfall's stable, long-documented public
 API; worth a real end-to-end smoke test once this runs somewhere with
 normal internet access.
 
+### Generalized into `applyGeneratedFields` for the AI card-generation wizard
+
+Everything above — text-field placement, the art layer's frame-window
+sizing, the rarity symbol, and the default groupings — used to live
+directly inside `importFromScryfall`, hardcoded to a `ScryfallCard`.
+It's now `applyGeneratedFields(fields: GeneratedCardFields,
+frameAssetId?)` (`Toolbar.tsx`), a generic version keyed on
+`GeneratedCardFields` (`generatedCardFields.ts`) — the same handful of
+fields (name/manaCost/typeLine/rulesText/flavorText/powerToughness/
+artist/rarity/imageSrc), just decoupled from Scryfall's response shape.
+`importFromScryfall` is now a thin adapter: `primaryCardFields(card)` →
+`applyGeneratedFields({...})`.
+
+The second (and motivating) caller is moxproxies-website's AI card-
+generation wizard, wired through `<card-studio-editor>`'s
+`generated-fields` JSON attribute (embed.ts) — see [How this is meant to
+connect to
+moxproxies-website](#how-this-is-meant-to-connect-to-moxproxies-website).
+Read once at mount into `designStore.ts`'s `pendingGeneratedCard`, and
+applied by a one-time effect in `Toolbar.tsx` before the shopper ever
+sees the canvas — the resulting layers *are* the design's first state,
+not a separate action they have to trigger themselves. Unlike Scryfall
+import (which only ever applies against whatever frame, if any, is
+already on the canvas), the wizard is building a design from nothing, so
+its payload can also carry a `frameAssetId` — when present,
+`applyGeneratedFields` adds that frame layer first and lays fields out
+against its category, rather than the (necessarily frame-less) current
+one.
+
 ## Layer groups
 
 A group is a name plus a set of layers — `Design.groups: { id, name }[]`
@@ -1439,6 +1468,21 @@ doesn't affect editing: the Transformer's selection handles live in a
 separate, unclipped group, so an overhanging layer is still fully
 visible-by-its-handles and draggable/resizable, only its painted pixels
 are held to the boundary.
+
+**Local image uploads (`addImage`, `Toolbar.tsx`) now read the file as a
+`data:` URI instead of `URL.createObjectURL`'s `blob:` URL.** A `blob:`
+URL is only a live reference into the current tab's memory — nothing
+keeps the underlying `File`/`Blob` around past that, so a design saved
+with one looked fine right up until the next reload, at which point that
+layer's image silently vanished, and `services/render`'s server-side
+print export (a separate process entirely) could never have loaded it to
+begin with. Neither problem exists for AI-generated art (`AiArtModal.tsx`
+already returns a `data:` URI) or Scryfall import (a real, always-
+reachable `https://` URL) — this was specifically an "Add Image" gap.
+`FileReader.readAsDataURL` costs some size (the encoded image lives
+directly in the saved design JSON rather than as a separate asset), an
+accepted tradeoff here for the same reason AI art's `data:` URI was: no
+S3/CORS story to solve for either origin otherwise.
 
 ## How this is meant to connect to moxproxies-website
 
